@@ -1,21 +1,21 @@
-name: CI/CD
+name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, develop ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, develop ]
 
 jobs:
   test:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:12
+        image: postgres:14-alpine
         env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: messenger_test
+          POSTGRES_USER: platform
+          POSTGRES_PASSWORD: platform_password
+          POSTGRES_DB: platform_test
         ports:
           - 5432:5432
         options: >-
@@ -24,32 +24,84 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
 
     - name: Set up Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v4
       with:
-        go-version: 1.16
+        go-version: '1.21'
+        check-latest: true
 
     - name: Install dependencies
-      run: |
-        go mod download
-        go mod tidy
-
-    - name: Run linter
-      uses: golangci/golangci-lint-action@v2
-      with:
-        version: latest
+      run: go mod download
 
     - name: Run tests
       env:
         DB_HOST: localhost
         DB_PORT: 5432
-        DB_USER: postgres
-        DB_PASSWORD: postgres
-        DB_NAME: messenger_test
-      run: go test -v ./...
+        DB_USER: platform
+        DB_PASSWORD: platform_password
+        DB_NAME: platform_test
+        REDIS_HOST: localhost
+        REDIS_PORT: 6379
+      run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.txt
+        fail_ci_if_error: true
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+        check-latest: true
+
+    - name: Install golangci-lint
+      run: |
+        curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.55.2
+        echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
+    - name: Run golangci-lint
+      run: golangci-lint run
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Run Gosec Security Scanner
+      uses: securego/gosec@master
+      with:
+        args: ./...
+
+    - name: Run Dependency Check
+      uses: dependency-check/Dependency-Check_Action@main
+      with:
+        project: 'Platform'
+        path: '.'
+        format: 'HTML'
+        out: 'reports'
+        args: >
+          --suppression ./.dependency-check/suppressions.xml
+          --failOnCVSS 7
 
   build:
     needs: test
