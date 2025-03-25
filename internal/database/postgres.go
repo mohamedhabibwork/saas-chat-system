@@ -73,9 +73,10 @@ func (p *PostgresDB) SetupTables() error {
 			tenant_id INTEGER,
 			role_id INTEGER,
 			is_active BOOLEAN DEFAULT true,
-			last_login TIMESTAMP,
-			created_at TIMESTAMP NOT NULL,
-			updated_at TIMESTAMP NOT NULL
+			timezone VARCHAR(50) DEFAULT 'UTC',
+			last_login TIMESTAMP WITH TIME ZONE,
+			created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+			updated_at TIMESTAMP WITH TIME ZONE NOT NULL
 		)`,
 
 		// Roles table
@@ -83,8 +84,8 @@ func (p *PostgresDB) SetupTables() error {
 			id SERIAL PRIMARY KEY,
 			name VARCHAR(50) UNIQUE NOT NULL,
 			description TEXT,
-			created_at TIMESTAMP NOT NULL,
-			updated_at TIMESTAMP NOT NULL
+			created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+			updated_at TIMESTAMP WITH TIME ZONE NOT NULL
 		)`,
 
 		// Permissions table
@@ -92,8 +93,8 @@ func (p *PostgresDB) SetupTables() error {
 			id SERIAL PRIMARY KEY,
 			name VARCHAR(50) UNIQUE NOT NULL,
 			description TEXT,
-			created_at TIMESTAMP NOT NULL,
-			updated_at TIMESTAMP NOT NULL
+			created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+			updated_at TIMESTAMP WITH TIME ZONE NOT NULL
 		)`,
 
 		// Role permissions table
@@ -110,9 +111,9 @@ func (p *PostgresDB) SetupTables() error {
 			token VARCHAR(255) UNIQUE NOT NULL,
 			device_info TEXT,
 			ip_address VARCHAR(45),
-			last_activity TIMESTAMP NOT NULL,
-			expires_at TIMESTAMP NOT NULL,
-			created_at TIMESTAMP NOT NULL
+			last_activity TIMESTAMP WITH TIME ZONE NOT NULL,
+			expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+			created_at TIMESTAMP WITH TIME ZONE NOT NULL
 		)`,
 
 		// Login attempts table
@@ -121,7 +122,7 @@ func (p *PostgresDB) SetupTables() error {
 			user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
 			ip_address VARCHAR(45),
 			success BOOLEAN NOT NULL,
-			created_at TIMESTAMP NOT NULL
+			created_at TIMESTAMP WITH TIME ZONE NOT NULL
 		)`,
 
 		// Password resets table
@@ -129,9 +130,9 @@ func (p *PostgresDB) SetupTables() error {
 			id SERIAL PRIMARY KEY,
 			user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
 			token VARCHAR(255) UNIQUE NOT NULL,
-			expires_at TIMESTAMP NOT NULL,
+			expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
 			used BOOLEAN DEFAULT false,
-			created_at TIMESTAMP NOT NULL
+			created_at TIMESTAMP WITH TIME ZONE NOT NULL
 		)`,
 
 		// Plans table
@@ -143,8 +144,8 @@ func (p *PostgresDB) SetupTables() error {
 			interval VARCHAR(20) NOT NULL,
 			features JSONB,
 			limits JSONB,
-			created_at TIMESTAMP NOT NULL,
-			updated_at TIMESTAMP NOT NULL
+			created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+			updated_at TIMESTAMP WITH TIME ZONE NOT NULL
 		)`,
 
 		// Subscriptions table
@@ -153,12 +154,12 @@ func (p *PostgresDB) SetupTables() error {
 			user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
 			plan_id INTEGER REFERENCES plans(id) ON DELETE CASCADE,
 			status VARCHAR(20) NOT NULL,
-			start_date TIMESTAMP NOT NULL,
-			end_date TIMESTAMP NOT NULL,
+			start_date TIMESTAMP WITH TIME ZONE NOT NULL,
+			end_date TIMESTAMP WITH TIME ZONE NOT NULL,
 			auto_renew BOOLEAN DEFAULT true,
 			payment_method VARCHAR(50),
-			created_at TIMESTAMP NOT NULL,
-			updated_at TIMESTAMP NOT NULL
+			created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+			updated_at TIMESTAMP WITH TIME ZONE NOT NULL
 		)`,
 
 		// Usage table
@@ -168,10 +169,10 @@ func (p *PostgresDB) SetupTables() error {
 			messages_sent INTEGER DEFAULT 0,
 			tokens_used INTEGER DEFAULT 0,
 			storage_used INTEGER DEFAULT 0,
-			period_start TIMESTAMP NOT NULL,
-			period_end TIMESTAMP NOT NULL,
-			created_at TIMESTAMP NOT NULL,
-			updated_at TIMESTAMP NOT NULL
+			period_start TIMESTAMP WITH TIME ZONE NOT NULL,
+			period_end TIMESTAMP WITH TIME ZONE NOT NULL,
+			created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+			updated_at TIMESTAMP WITH TIME ZONE NOT NULL
 		)`,
 
 		// Payments table
@@ -183,8 +184,8 @@ func (p *PostgresDB) SetupTables() error {
 			status VARCHAR(20) NOT NULL,
 			payment_method VARCHAR(50),
 			transaction_id VARCHAR(255),
-			created_at TIMESTAMP NOT NULL,
-			updated_at TIMESTAMP NOT NULL
+			created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+			updated_at TIMESTAMP WITH TIME ZONE NOT NULL
 		)`,
 
 		// Bots table
@@ -194,8 +195,8 @@ func (p *PostgresDB) SetupTables() error {
 			tenant_id INTEGER,
 			token VARCHAR(255) UNIQUE NOT NULL,
 			config JSONB NOT NULL,
-			created_at TIMESTAMP NOT NULL,
-			updated_at TIMESTAMP NOT NULL
+			created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+			updated_at TIMESTAMP WITH TIME ZONE NOT NULL
 		)`,
 
 		// Bot interactions table
@@ -206,7 +207,7 @@ func (p *PostgresDB) SetupTables() error {
 			message TEXT NOT NULL,
 			response TEXT NOT NULL,
 			tokens_used INTEGER NOT NULL,
-			created_at TIMESTAMP NOT NULL
+			created_at TIMESTAMP WITH TIME ZONE NOT NULL
 		)`,
 
 		// Bot stats table
@@ -215,9 +216,9 @@ func (p *PostgresDB) SetupTables() error {
 			bot_id INTEGER REFERENCES bots(id) ON DELETE CASCADE,
 			interactions_count INTEGER DEFAULT 0,
 			total_tokens_used INTEGER DEFAULT 0,
-			last_interaction TIMESTAMP,
-			created_at TIMESTAMP NOT NULL,
-			updated_at TIMESTAMP NOT NULL
+			last_interaction TIMESTAMP WITH TIME ZONE,
+			created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+			updated_at TIMESTAMP WITH TIME ZONE NOT NULL
 		)`,
 
 		`CREATE TABLE IF NOT EXISTS files (
@@ -266,6 +267,7 @@ func (p *PostgresDB) SetupTables() error {
 			content TEXT NOT NULL,
 			type VARCHAR(20) NOT NULL DEFAULT 'text',
 			metadata JSONB DEFAULT '{}',
+			sender_timezone VARCHAR(50),
 			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 		)`,
 

@@ -73,7 +73,7 @@ func createTables(db *sql.DB) error {
 		CREATE TABLE IF NOT EXISTS tenants (
 			id SERIAL PRIMARY KEY,
 			name VARCHAR(100) UNIQUE NOT NULL,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 		)
 	`)
 	if err != nil {
@@ -87,7 +87,8 @@ func createTables(db *sql.DB) error {
 			username VARCHAR(50) NOT NULL,
 			password VARCHAR(100) NOT NULL,
 			tenant_id INTEGER REFERENCES tenants(id),
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			timezone VARCHAR(50) DEFAULT 'UTC',
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE(username, tenant_id)
 		)
 	`)
@@ -101,7 +102,7 @@ func createTables(db *sql.DB) error {
 			id SERIAL PRIMARY KEY,
 			name VARCHAR(100) NOT NULL,
 			tenant_id INTEGER REFERENCES tenants(id),
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE(name, tenant_id)
 		)
 	`)
@@ -114,7 +115,7 @@ func createTables(db *sql.DB) error {
 		CREATE TABLE IF NOT EXISTS group_members (
 			group_id INTEGER REFERENCES groups(id),
 			user_id INTEGER REFERENCES users(id),
-			joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			joined_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY (group_id, user_id)
 		)
 	`)
@@ -128,7 +129,7 @@ func createTables(db *sql.DB) error {
 			id SERIAL PRIMARY KEY,
 			name VARCHAR(100) NOT NULL,
 			tenant_id INTEGER REFERENCES tenants(id),
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE(name, tenant_id)
 		)
 	`)
@@ -141,7 +142,7 @@ func createTables(db *sql.DB) error {
 		CREATE TABLE IF NOT EXISTS topic_subscriptions (
 			topic_id INTEGER REFERENCES topics(id),
 			user_id INTEGER REFERENCES users(id),
-			subscribed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			subscribed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY (topic_id, user_id)
 		)
 	`)
@@ -160,7 +161,7 @@ func createTables(db *sql.DB) error {
 			tenant_id INTEGER REFERENCES tenants(id),
 			content TEXT NOT NULL,
 			message_type VARCHAR(20) NOT NULL,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 		)
 	`)
 	if err != nil {
@@ -174,8 +175,8 @@ func createTables(db *sql.DB) error {
 			name VARCHAR(100) NOT NULL,
 			tenant_id INTEGER REFERENCES tenants(id),
 			token VARCHAR(255) NOT NULL,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE(name, tenant_id)
 		)
 	`)
@@ -191,8 +192,8 @@ func createTables(db *sql.DB) error {
 			description TEXT,
 			tenant_id INTEGER REFERENCES tenants(id),
 			created_by INTEGER REFERENCES users(id),
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE(name, tenant_id)
 		)
 	`)
@@ -206,7 +207,7 @@ func createTables(db *sql.DB) error {
 			channel_id INTEGER REFERENCES channels(id),
 			user_id INTEGER REFERENCES users(id),
 			role VARCHAR(20) NOT NULL DEFAULT 'member',
-			joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			joined_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY (channel_id, user_id)
 		)
 	`)

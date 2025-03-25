@@ -145,9 +145,10 @@ type BotMessage struct {
 
 // ChannelMessage represents a message in a channel
 type ChannelMessage struct {
-	ID        int       `json:"id"`
-	ChannelID int       `json:"channel_id"`
-	SenderID  int       `json:"sender_id"`
-	Content   string    `json:"content"`
-	CreatedAt time.Time `json:"created_at"`
+	ID            int       `json:"id"`
+	ChannelID     int       `json:"channel_id"`
+	SenderID      int       `json:"sender_id"`
+	Content       string    `json:"content"`
+	SenderTimezone string    `json:"sender_timezone,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
 } 

@@ -5,6 +5,8 @@ import { HttpClient } from '../http-client';
 import { WebSocketMessage, PaginatedResponse } from '../types';
 import { EventEmitter } from 'events';
 import { PlatformSDK } from '../index';
+import { formatTimestamp, getUserTimezone } from '../utils';
+import { ChatEvent } from '../types/events';
 
 interface ChatMessage {
   id?: string;
@@ -13,6 +15,7 @@ interface ChatMessage {
   channel: string;
   content: string;
   timestamp: number;
+  formattedTime?: string;
   type?: string;
   attachments?: any[];
 }
@@ -83,7 +86,7 @@ export class ChatManager extends EventEmitter {
 
       this.socket.onopen = () => {
         this.connected = true;
-        this.emit('connected');
+        this.emit(ChatEvent.CONNECTED);
         
         // Rejoin all previously joined channels
         this.channels.forEach(channel => {
@@ -95,7 +98,7 @@ export class ChatManager extends EventEmitter {
 
       this.socket.onclose = () => {
         this.connected = false;
-        this.emit('disconnected');
+        this.emit(ChatEvent.DISCONNECTED);
         
         // Attempt to reconnect after a delay
         setTimeout(() => {
@@ -104,7 +107,7 @@ export class ChatManager extends EventEmitter {
       };
 
       this.socket.onerror = (error) => {
-        this.emit('error', error);
+        this.emit(ChatEvent.ERROR, error);
         reject(error);
       };
 
@@ -114,27 +117,27 @@ export class ChatManager extends EventEmitter {
           
           // Handle different message types
           switch (message.type) {
-            case 'chat_message':
+            case ChatEvent.CHAT_MESSAGE:
               await this.handleChatMessage(message);
               break;
               
-            case 'user_joined':
+            case ChatEvent.USER_JOINED_WS:
               this.handleUserJoined(message);
               break;
               
-            case 'user_left':
+            case ChatEvent.USER_LEFT_WS:
               this.handleUserLeft(message);
               break;
               
-            case 'key_exchange':
+            case ChatEvent.KEY_EXCHANGE:
               await this.handleKeyExchange(message);
               break;
               
             default:
-              this.emit('message', message);
+              this.emit(ChatEvent.MESSAGE, message);
           }
         } catch (error) {
-          this.emit('error', error);
+          this.emit(ChatEvent.ERROR, error);
         }
       };
     });
@@ -176,12 +179,12 @@ export class ChatManager extends EventEmitter {
     
     // Send join message
     this.sendToSocket({
-      type: 'join_channel',
+      type: ChatEvent.JOIN_CHANNEL,
       channel,
       payload: JSON.stringify({ channel })
     });
     
-    this.emit('channel_joined', channel);
+    this.emit(ChatEvent.CHANNEL_JOINED, channel);
   }
 
   /**
@@ -194,7 +197,7 @@ export class ChatManager extends EventEmitter {
     }
 
     this.sendToSocket({
-      type: 'leave_channel',
+      type: ChatEvent.LEAVE_CHANNEL,
       channel,
       payload: JSON.stringify({ channel })
     });
@@ -205,7 +208,7 @@ export class ChatManager extends EventEmitter {
     this.messageHistory.delete(channel);
     this.pendingMessages.delete(channel);
     
-    this.emit('channel_left', channel);
+    this.emit(ChatEvent.CHANNEL_LEFT, channel);
   }
 
   /**
@@ -223,12 +226,15 @@ export class ChatManager extends EventEmitter {
       throw new Error(`Not joined to channel: ${channel}`);
     }
 
+    const messageTimestamp = Date.now();
+    
     const message: ChatMessage = {
       userId: this.sdk.auth.getUserId() || 'anonymous',
       username: this.sdk.auth.getUsername() || 'Anonymous User',
       channel,
       content,
-      timestamp: Date.now(),
+      timestamp: messageTimestamp,
+      formattedTime: formatTimestamp(messageTimestamp, 'short'),
       attachments
     };
 
@@ -237,7 +243,7 @@ export class ChatManager extends EventEmitter {
       this.messageHistory.set(channel, []);
     }
     this.messageHistory.get(channel)?.push(message);
-    this.emit('message_sent', message);
+    this.emit(ChatEvent.MESSAGE_SENT, message);
 
     // Track pending message
     if (!this.pendingMessages.has(channel)) {
@@ -250,7 +256,8 @@ export class ChatManager extends EventEmitter {
       content,
       attachments,
       metadata: {
-        clientId: Date.now().toString(),
+        clientId: messageTimestamp.toString(),
+        timezone: getUserTimezone()
       }
     };
 
@@ -263,18 +270,18 @@ export class ChatManager extends EventEmitter {
         );
         
         this.sendToSocket({
-          type: 'chat_message',
+          type: ChatEvent.CHAT_MESSAGE,
           channel,
           encryptedData
         });
       } catch (error) {
-        this.emit('error', error);
+        this.emit(ChatEvent.ERROR, error);
         throw error;
       }
     } else {
       // Fallback to unencrypted message
       this.sendToSocket({
-        type: 'chat_message',
+        type: ChatEvent.CHAT_MESSAGE,
         channel,
         payload: JSON.stringify(messagePayload)
       });
@@ -291,13 +298,13 @@ export class ChatManager extends EventEmitter {
       
       if (response && Array.isArray(response)) {
         this.onlineUsers.set(channel, response);
-        this.emit('online_users_updated', channel, response);
+        this.emit(ChatEvent.ONLINE_USERS_UPDATED, channel, response);
         return response;
       }
       
       return [];
     } catch (error) {
-      this.emit('error', error);
+      this.emit(ChatEvent.ERROR, error);
       return [];
     }
   }
@@ -327,6 +334,11 @@ export class ChatManager extends EventEmitter {
           !existingMessages.some(existing => existing.id === msg.id)
         );
         
+        // Add formatted timestamps to all messages
+        newMessages.forEach(msg => {
+          msg.formattedTime = formatTimestamp(msg.timestamp, 'short');
+        });
+        
         // Sort by timestamp
         const allMessages = [...existingMessages, ...newMessages].sort((a, b) => a.timestamp - b.timestamp);
         
@@ -334,14 +346,14 @@ export class ChatManager extends EventEmitter {
         this.messageHistory.set(channel, allMessages);
         
         // Emit event
-        this.emit('history_loaded', channel, allMessages);
+        this.emit(ChatEvent.HISTORY_LOADED, channel, allMessages);
         
         return allMessages;
       }
       
       return [];
     } catch (error) {
-      this.emit('error', error);
+      this.emit(ChatEvent.ERROR, error);
       return [];
     }
   }
@@ -406,7 +418,7 @@ export class ChatManager extends EventEmitter {
         const decryptedData = await this.decryptData(encryptedData, channel);
         messageContent = JSON.parse(decryptedData);
       } catch (error) {
-        this.emit('error', new Error(`Failed to decrypt message: ${error}`));
+        this.emit(ChatEvent.ERROR, new Error(`Failed to decrypt message: ${error}`));
         return;
       }
     } else if (payload) {
@@ -414,20 +426,23 @@ export class ChatManager extends EventEmitter {
       try {
         messageContent = typeof payload === 'string' ? JSON.parse(payload) : payload;
       } catch (error) {
-        this.emit('error', new Error(`Failed to parse message payload: ${error}`));
+        this.emit(ChatEvent.ERROR, new Error(`Failed to parse message payload: ${error}`));
         return;
       }
     } else {
-      this.emit('error', new Error('Invalid message format: no payload or encrypted data'));
+      this.emit(ChatEvent.ERROR, new Error('Invalid message format: no payload or encrypted data'));
       return;
     }
+    
+    const messageTimestamp = timestamp || Date.now();
     
     // Build the message object
     const chatMessage: ChatMessage = {
       userId,
       channel,
       content: messageContent.content,
-      timestamp: timestamp || Date.now(),
+      timestamp: messageTimestamp,
+      formattedTime: formatTimestamp(messageTimestamp, 'short'),
       attachments: messageContent.attachments
     };
     
@@ -441,7 +456,7 @@ export class ChatManager extends EventEmitter {
     this.messageHistory.get(channel)?.push(chatMessage);
     
     // Emit the message event
-    this.emit('message_received', chatMessage);
+    this.emit(ChatEvent.MESSAGE_RECEIVED, chatMessage);
   }
 
   /**
@@ -460,7 +475,7 @@ export class ChatManager extends EventEmitter {
     this.getOnlineUsers(channel);
     
     // Emit the user joined event
-    this.emit('user_joined', channel, userId);
+    this.emit(ChatEvent.USER_JOINED, channel, userId);
   }
 
   /**
@@ -481,8 +496,8 @@ export class ChatManager extends EventEmitter {
     this.onlineUsers.set(channel, updatedUsers);
     
     // Emit the user left event
-    this.emit('user_left', channel, userId);
-    this.emit('online_users_updated', channel, updatedUsers);
+    this.emit(ChatEvent.USER_LEFT, channel, userId);
+    this.emit(ChatEvent.ONLINE_USERS_UPDATED, channel, updatedUsers);
   }
 
   /**
@@ -506,7 +521,7 @@ export class ChatManager extends EventEmitter {
         
         // Acknowledge key receipt
         this.sendToSocket({
-          type: 'key_exchange_response',
+          type: ChatEvent.KEY_EXCHANGE_RESPONSE,
           channel,
           payload: JSON.stringify({
             channel,
@@ -518,7 +533,7 @@ export class ChatManager extends EventEmitter {
         await this.getCryptoKeyForChannel(channel);
         
         // Emit the key exchange event
-        this.emit('key_exchange_complete', channel);
+        this.emit(ChatEvent.KEY_EXCHANGE_COMPLETE, channel);
         
         // Process any pending messages now that we have the key
         const pendingMessages = this.pendingMessages.get(channel) || [];
@@ -528,7 +543,7 @@ export class ChatManager extends EventEmitter {
         this.pendingMessages.set(channel, []);
       }
     } catch (error) {
-      this.emit('error', new Error(`Failed to process key exchange: ${error}`));
+      this.emit(ChatEvent.ERROR, new Error(`Failed to process key exchange: ${error}`));
     }
   }
 

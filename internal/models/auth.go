@@ -15,6 +15,7 @@ type User struct {
 	TenantID      int       `json:"tenant_id"`
 	RoleID        int       `json:"role_id"`
 	IsActive      bool      `json:"is_active"`
+	Timezone      string    `json:"timezone"`
 	LastLogin     time.Time `json:"last_login"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`

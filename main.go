@@ -77,17 +77,19 @@ type Client struct {
 
 // Message represents a chat message
 type Message struct {
-	Type       string    `json:"type"` // "private", "group", "notification"
-	Content    string    `json:"content"`
-	Sender     string    `json:"sender"`
-	SenderID   int       `json:"sender_id"`
-	TenantID   int       `json:"tenant_id"`
-	Receiver   string    `json:"receiver,omitempty"`
-	ReceiverID int       `json:"receiver_id,omitempty"`
-	GroupID    int       `json:"group_id,omitempty"`
-	GroupName  string    `json:"group_name,omitempty"`
-	TopicName  string    `json:"topic_name,omitempty"`
-	Timestamp  time.Time `json:"timestamp"`
+	Type           string                 `json:"type"` // "private", "group", "notification"
+	Content        string                 `json:"content"`
+	Sender         string                 `json:"sender"`
+	SenderID       int                    `json:"sender_id"`
+	TenantID       int                    `json:"tenant_id"`
+	Receiver       string                 `json:"receiver,omitempty"`
+	ReceiverID     int                    `json:"receiver_id,omitempty"`
+	GroupID        int                    `json:"group_id,omitempty"`
+	GroupName      string                 `json:"group_name,omitempty"`
+	TopicName      string                 `json:"topic_name,omitempty"`
+	Timestamp      time.Time              `json:"timestamp"`
+	SenderTimezone string                 `json:"sender_timezone,omitempty"`
+	Metadata       map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // Hub maintains active clients and broadcasts messages
@@ -423,7 +425,7 @@ func handleWebSocket(hub *Hub, w http.ResponseWriter, r *http.Request) {
 
 	// Start goroutines for reading and writing
 	go readPump(hub, client)
-	go writePump(client)
+	go writePump(hub, client)
 }
 
 func readPump(hub *Hub, client *Client) {
@@ -461,6 +463,22 @@ func readPump(hub *Hub, client *Client) {
 		msg.TenantID = client.TenantID
 		msg.Timestamp = time.Now()
 
+		// Get user's timezone
+		var timezone string
+		err = db.QueryRow("SELECT timezone FROM users WHERE id = $1", client.ID).Scan(&timezone)
+		if err != nil {
+			timezone = "UTC" // Default to UTC if not found
+		}
+		
+		// Set sender timezone
+		msg.SenderTimezone = timezone
+		
+		// Initialize metadata if needed
+		if msg.Metadata == nil {
+			msg.Metadata = make(map[string]interface{})
+		}
+		msg.Metadata["sender_timezone"] = timezone
+
 		// Route message based on type
 		switch msg.Type {
 		case "private":
@@ -482,34 +500,47 @@ func readPump(hub *Hub, client *Client) {
 	}
 }
 
-func writePump(client *Client) {
+func writePump(hub *Hub, client *Client) {
 	ticker := time.NewTicker(54 * time.Second)
 	defer func() {
 		ticker.Stop()
 		_ = client.Conn.Close()
 	}()
 
+	// Get recipient's timezone
+	var recipientTimezone string
+	err := db.QueryRow("SELECT timezone FROM users WHERE id = $1", client.ID).Scan(&recipientTimezone)
+	if err != nil {
+		recipientTimezone = "UTC" // Default to UTC if not found
+	}
+
 	for {
 		select {
 		case message, ok := <-client.Send:
 			_ = client.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if !ok {
-				// Hub closed the channel
 				_ = client.Conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
+			}
+
+			// Format timestamp according to recipient's timezone
+			if message.Timestamp != nil {
+				loc, err := time.LoadLocation(recipientTimezone)
+				if err == nil {
+					message.Timestamp = message.Timestamp.In(loc)
+				}
 			}
 
 			w, err := client.Conn.NextWriter(websocket.TextMessage)
 			if err != nil {
 				return
 			}
-			_, _ = w.Write(message)
+			_ = json.NewEncoder(w).Encode(message)
 
-			// Add queued messages
 			n := len(client.Send)
 			for i := 0; i < n; i++ {
-				_, _ = w.Write([]byte{'\n'})
-				_, _ = w.Write(<-client.Send)
+				_ = w.Write([]byte{'\n'})
+				_ = json.NewEncoder(w).Encode(<-client.Send)
 			}
 
 			if err := w.Close(); err != nil {
@@ -674,6 +705,97 @@ func main() {
 
 		resp := map[string]interface{}{"id": userID, "username": user.Username, "tenant_id": user.TenantID}
 		respondWithJSON(w, http.StatusCreated, resp)
+	})
+
+	// User preferences endpoint
+	http.HandleFunc("/user/preferences", func(w http.ResponseWriter, r *http.Request) {
+		// Extract user ID from auth token or session
+		userIDStr := r.URL.Query().Get("user_id")
+		if userIDStr == "" {
+			respondWithError(w, NewAPIError(http.StatusBadRequest, ErrBadRequest, "user_id is required"))
+			return
+		}
+		
+		var userID int
+		fmt.Sscanf(userIDStr, "%d", &userID)
+		
+		if r.Method == http.MethodGet {
+			// Get user's timezone from database
+			var timezone string
+			err := db.QueryRow("SELECT timezone FROM users WHERE id = $1", userID).Scan(&timezone)
+			if err != nil {
+				timezone = "UTC" // Default to UTC if not found
+			}
+
+			// Return user preferences
+			prefs := map[string]interface{}{
+				"timezone": timezone,
+			}
+
+			respondWithJSON(w, http.StatusOK, prefs)
+		} else if r.Method == http.MethodPut || r.Method == http.MethodPost {
+			// Parse request body
+			var prefs struct {
+				Timezone string `json:"timezone"`
+			}
+			
+			if err := json.NewDecoder(r.Body).Decode(&prefs); err != nil {
+				respondWithError(w, NewAPIError(http.StatusBadRequest, ErrBadRequest, "Invalid request body"))
+				return
+			}
+
+			// Validate timezone
+			if prefs.Timezone != "" {
+				_, err := time.LoadLocation(prefs.Timezone)
+				if err != nil {
+					respondWithError(w, NewAPIError(http.StatusBadRequest, ErrBadRequest, "Invalid timezone"))
+					return
+				}
+			}
+
+			// Update user's timezone in database
+			_, err := db.Exec("UPDATE users SET timezone = $1 WHERE id = $2", 
+				prefs.Timezone, userID)
+			if err != nil {
+				respondWithError(w, NewAPIError(http.StatusInternalServerError, ErrInternalServerError, "Failed to update preferences"))
+				return
+			}
+
+			// Return updated preferences
+			respondWithJSON(w, http.StatusOK, prefs)
+		} else {
+			respondWithError(w, NewAPIError(http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed"))
+		}
+	})
+	
+	// Timezone list endpoint
+	http.HandleFunc("/timezones", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			respondWithError(w, NewAPIError(http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed"))
+			return
+		}
+		
+		// This is a simplified list of timezones
+		// In a real app, you might want to generate this dynamically or include more information
+		timezones := []string{
+			"UTC",
+			"Europe/London",
+			"Europe/Paris",
+			"Europe/Berlin",
+			"America/New_York",
+			"America/Chicago",
+			"America/Denver",
+			"America/Los_Angeles",
+			"Asia/Tokyo",
+			"Asia/Shanghai",
+			"Asia/Kolkata",
+			"Australia/Sydney",
+			"Pacific/Auckland",
+		}
+
+		respondWithJSON(w, http.StatusOK, map[string]interface{}{
+			"timezones": timezones,
+		})
 	})
 
 	// Group management endpoint
