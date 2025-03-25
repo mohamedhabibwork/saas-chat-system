@@ -32,8 +32,23 @@ jobs:
         if: secrets.AWS_ACCESS_KEY_ID != ''
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+          FIREBASE_PRIVATE_KEY_ID: ${{ secrets.FIREBASE_PRIVATE_KEY_ID }}
+          FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+          FIREBASE_CLIENT_ID: ${{ secrets.FIREBASE_CLIENT_ID }}
+          FIREBASE_CERT_URL: ${{ secrets.FIREBASE_CERT_URL }}
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+          ENCRYPTION_SALT: ${{ secrets.ENCRYPTION_SALT }}
         run: |
-          docker build -t $ECR_REGISTRY/platform-api:${{ github.sha }} .
+          docker build \
+            --build-arg FIREBASE_PRIVATE_KEY="$FIREBASE_PRIVATE_KEY" \
+            --build-arg FIREBASE_PRIVATE_KEY_ID="$FIREBASE_PRIVATE_KEY_ID" \
+            --build-arg FIREBASE_CLIENT_EMAIL="$FIREBASE_CLIENT_EMAIL" \
+            --build-arg FIREBASE_CLIENT_ID="$FIREBASE_CLIENT_ID" \
+            --build-arg FIREBASE_CERT_URL="$FIREBASE_CERT_URL" \
+            --build-arg ENCRYPTION_KEY="$ENCRYPTION_KEY" \
+            --build-arg ENCRYPTION_SALT="$ENCRYPTION_SALT" \
+            -t $ECR_REGISTRY/platform-api:${{ github.sha }} .
           docker push $ECR_REGISTRY/platform-api:${{ github.sha }}
 
       - name: Build without push
@@ -44,7 +59,23 @@ jobs:
         if: secrets.KUBERNETES_CONFIG != ''
         env:
           KUBECONFIG: ${{ secrets.KUBERNETES_CONFIG }}
+          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+          FIREBASE_PRIVATE_KEY_ID: ${{ secrets.FIREBASE_PRIVATE_KEY_ID }}
+          FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+          FIREBASE_CLIENT_ID: ${{ secrets.FIREBASE_CLIENT_ID }}
+          FIREBASE_CERT_URL: ${{ secrets.FIREBASE_CERT_URL }}
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+          ENCRYPTION_SALT: ${{ secrets.ENCRYPTION_SALT }}
         run: |
+          kubectl create secret generic platform-secrets \
+            --from-literal=firebase-private-key="$FIREBASE_PRIVATE_KEY" \
+            --from-literal=firebase-private-key-id="$FIREBASE_PRIVATE_KEY_ID" \
+            --from-literal=firebase-client-email="$FIREBASE_CLIENT_EMAIL" \
+            --from-literal=firebase-client-id="$FIREBASE_CLIENT_ID" \
+            --from-literal=firebase-cert-url="$FIREBASE_CERT_URL" \
+            --from-literal=encryption-key="$ENCRYPTION_KEY" \
+            --from-literal=encryption-salt="$ENCRYPTION_SALT" \
+            --dry-run=client -o yaml | kubectl apply -f -
           kubectl set image deployment/platform-api platform-api=$ECR_REGISTRY/platform-api:${{ github.sha }}
           kubectl rollout status deployment/platform-api
 

@@ -1,7 +1,7 @@
 {
-  "name": "platform-sdk",
+  "name": "@platform/client",
   "version": "1.0.0",
-  "description": "SDK for integrating with the platform",
+  "description": "Platform client SDK",
   "main": "dist/index.js",
   "module": "dist/index.esm.js",
   "types": "dist/index.d.ts",
@@ -13,8 +13,8 @@
     "build": "npm run clean && rollup -c",
     "build:types": "tsc --emitDeclarationOnly",
     "test": "jest",
-    "lint": "eslint 'ts/**/*.ts'",
-    "format": "prettier --write 'ts/**/*.ts'",
+    "lint": "eslint . --ext .ts",
+    "format": "prettier --write \"src/**/*.ts\"",
     "prepare": "npm run build",
     "prepublishOnly": "npm test && npm run lint"
   },
@@ -41,21 +41,25 @@
     "@rollup/plugin-commonjs": "^22.0.0",
     "@rollup/plugin-node-resolve": "^13.3.0",
     "@rollup/plugin-typescript": "^8.3.2",
-    "@types/jest": "^29.5.0",
-    "@types/node": "^18.15.11",
-    "@typescript-eslint/eslint-plugin": "^5.57.1",
-    "@typescript-eslint/parser": "^5.57.1",
-    "eslint": "^8.37.0",
-    "jest": "^29.5.0",
-    "prettier": "^2.8.7",
+    "@types/events": "^3.0.3",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.11.24",
+    "@types/ws": "^8.5.10",
+    "@typescript-eslint/eslint-plugin": "^7.1.0",
+    "@typescript-eslint/parser": "^7.1.0",
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.2.5",
     "rimraf": "^4.4.1",
     "rollup": "^3.20.2",
     "rollup-plugin-terser": "^7.0.2",
-    "ts-jest": "^29.1.0",
-    "typescript": "^5.0.3"
+    "ts-jest": "^29.1.2",
+    "typescript": "^5.3.3"
   },
   "dependencies": {
-    "isomorphic-fetch": "^3.0.0"
+    "events": "^3.3.0",
+    "axios": "^1.6.7",
+    "ws": "^8.16.0"
   },
   "engines": {
     "node": ">=14.0.0"

@@ -53,6 +53,17 @@ jobs:
           file: ./coverage.out
           fail_ci_if_error: true
 
+      - name: Test Firebase Configuration
+        if: secrets.FIREBASE_PRIVATE_KEY != ''
+        run: |
+          echo "${{ secrets.FIREBASE_PRIVATE_KEY }}" > firebase-key.json
+          go test -v ./internal/firebase/...
+
+      - name: Test Encryption
+        if: secrets.ENCRYPTION_KEY != ''
+        run: |
+          go test -v ./internal/encryption/...
+
   build:
     needs: test
     runs-on: ubuntu-latest
@@ -80,6 +91,14 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/platform-api:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            FIREBASE_PRIVATE_KEY=${{ secrets.FIREBASE_PRIVATE_KEY }}
+            FIREBASE_PRIVATE_KEY_ID=${{ secrets.FIREBASE_PRIVATE_KEY_ID }}
+            FIREBASE_CLIENT_EMAIL=${{ secrets.FIREBASE_CLIENT_EMAIL }}
+            FIREBASE_CLIENT_ID=${{ secrets.FIREBASE_CLIENT_ID }}
+            FIREBASE_CERT_URL=${{ secrets.FIREBASE_CERT_URL }}
+            ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }}
+            ENCRYPTION_SALT=${{ secrets.ENCRYPTION_SALT }}
 
       - name: Build without push
         if: secrets.DOCKERHUB_TOKEN == ''
