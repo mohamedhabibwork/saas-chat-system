@@ -8,53 +8,66 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
+      - name: Set up kubectl
+        if: secrets.KUBERNETES_CONFIG != ''
+        uses: azure/setup-kubectl@v3
 
-    - name: Login to Docker Hub
-      uses: docker/login-action@v2
-      with:
-        username: ${{ secrets.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Configure AWS credentials
+        if: secrets.AWS_ACCESS_KEY_ID != ''
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v4
-      with:
-        context: .
-        push: true
-        tags: |
-          ${{ secrets.DOCKERHUB_USERNAME }}/platform:latest
-          ${{ secrets.DOCKERHUB_USERNAME }}/platform:${{ github.sha }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+      - name: Login to Amazon ECR
+        if: secrets.AWS_ACCESS_KEY_ID != ''
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
 
-    - name: Deploy to Kubernetes
-      if: github.ref == 'refs/heads/main'
-      uses: azure/k8s-deploy@v1
-      with:
-        manifests: |
-          k8s/deployment.yaml
-          k8s/service.yaml
-          k8s/ingress.yaml
-        images: |
-          ${{ secrets.DOCKERHUB_USERNAME }}/platform:${{ github.sha }}
-        namespace: platform
-        kubectl-version: 'latest'
+      - name: Build and push Docker image
+        if: secrets.AWS_ACCESS_KEY_ID != ''
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker build -t $ECR_REGISTRY/platform-api:${{ github.sha }} .
+          docker push $ECR_REGISTRY/platform-api:${{ github.sha }}
 
-    - name: Notify Slack
-      if: always()
-      uses: 8398a7/action-slack@v3
-      with:
-        status: ${{ job.status }}
-        fields: repo,message,commit,author,action,eventName,ref,workflow,job,took
-        custom_payload: |
-          {
-            "text": "Deployment ${{ job.status }} for ${{ github.repository }}"
-          }
-      env:
-        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }} 
+      - name: Build without push
+        if: secrets.AWS_ACCESS_KEY_ID == ''
+        run: docker build -t platform-api .
+
+      - name: Deploy to Kubernetes
+        if: secrets.KUBERNETES_CONFIG != ''
+        env:
+          KUBECONFIG: ${{ secrets.KUBERNETES_CONFIG }}
+        run: |
+          kubectl set image deployment/platform-api platform-api=$ECR_REGISTRY/platform-api:${{ github.sha }}
+          kubectl rollout status deployment/platform-api
+
+      - name: Deploy without Kubernetes
+        if: secrets.KUBERNETES_CONFIG == ''
+        run: |
+          echo "Skipping Kubernetes deployment - no configuration provided"
+          echo "To enable Kubernetes deployment, add KUBERNETES_CONFIG secret"
+
+  notify:
+    needs: deploy
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify on failure
+        if: failure()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const issue = context.issue
+            github.rest.issues.createComment({
+              owner: issue.owner,
+              repo: issue.repo,
+              issue_number: issue.number,
+              body: '❌ CD pipeline failed. Please check the [workflow run](' + context.serverUrl + '/' + context.repo.owner + '/' + context.repo.repo + '/actions/runs/' + context.runId + ') for details.'
+            }) 
