@@ -1,0 +1,118 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: platform-api
+  namespace: platform
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: platform-api
+  template:
+    metadata:
+      labels:
+        app: platform-api
+    spec:
+      containers:
+      - name: platform-api
+        image: your-registry/platform-api:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: platform-config
+              key: db-host
+        - name: DB_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: platform-config
+              key: db-port
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: platform-secrets
+              key: db-user
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: platform-secrets
+              key: db-password
+        - name: DB_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: platform-config
+              key: db-name
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: platform-config
+              key: redis-host
+        - name: REDIS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: platform-config
+              key: redis-port
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: platform-secrets
+              key: jwt-secret
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: platform-api
+  namespace: platform
+spec:
+  selector:
+    app: platform-api
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: platform-ingress
+  namespace: platform
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  tls:
+  - hosts:
+    - api.your-platform.com
+    secretName: platform-tls
+  rules:
+  - host: api.your-platform.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: platform-api
+            port:
+              number: 80 

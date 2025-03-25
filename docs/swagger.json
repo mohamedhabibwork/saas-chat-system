@@ -1,0 +1,699 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "Chat Application API",
+    "description": "API documentation for the Chat Application",
+    "version": "1.0.0"
+  },
+  "host": "localhost:8080",
+  "basePath": "/api",
+  "schemes": ["http", "https", "ws", "wss"],
+  "paths": {
+    "/bots": {
+      "post": {
+        "summary": "Create a new bot",
+        "description": "Creates a new bot in the system",
+        "parameters": [
+          {
+            "name": "bot",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Name of the bot"
+                },
+                "tenant_id": {
+                  "type": "integer",
+                  "description": "ID of the tenant"
+                }
+              },
+              "required": ["name", "tenant_id"]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Bot created successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "token": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          }
+        }
+      }
+    },
+    "/bots/list": {
+      "get": {
+        "summary": "List all bots",
+        "description": "Returns a list of all bots for a tenant",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "description": "ID of the tenant"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of bots",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/bots/delete": {
+      "delete": {
+        "summary": "Delete a bot",
+        "description": "Deletes a bot from the system",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "description": "ID of the bot to delete"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bot deleted successfully"
+          },
+          "404": {
+            "description": "Bot not found"
+          }
+        }
+      }
+    },
+    "/channels": {
+      "post": {
+        "summary": "Create a new channel",
+        "description": "Creates a new channel in the system",
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Name of the channel"
+                },
+                "description": {
+                  "type": "string",
+                  "description": "Description of the channel"
+                },
+                "tenant_id": {
+                  "type": "integer",
+                  "description": "ID of the tenant"
+                },
+                "created_by": {
+                  "type": "integer",
+                  "description": "ID of the user creating the channel"
+                }
+              },
+              "required": ["name", "tenant_id", "created_by"]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Channel created successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "tenant_id": {
+                  "type": "integer"
+                },
+                "created_by": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/list": {
+      "get": {
+        "summary": "List all channels",
+        "description": "Returns a list of all channels for a tenant",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "description": "ID of the tenant"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of channels",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "created_by": {
+                    "type": "integer"
+                  },
+                  "creator_username": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/join": {
+      "post": {
+        "summary": "Join a channel",
+        "description": "Adds a user to a channel",
+        "parameters": [
+          {
+            "name": "membership",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "channel_id": {
+                  "type": "integer",
+                  "description": "ID of the channel"
+                },
+                "user_id": {
+                  "type": "integer",
+                  "description": "ID of the user"
+                }
+              },
+              "required": ["channel_id", "user_id"]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "User joined channel successfully"
+          }
+        }
+      }
+    },
+    "/channels/leave": {
+      "delete": {
+        "summary": "Leave a channel",
+        "description": "Removes a user from a channel",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "description": "ID of the channel"
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "description": "ID of the user"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User left channel successfully"
+          }
+        }
+      }
+    },
+    "/tabs": {
+      "post": {
+        "summary": "Create a new tab",
+        "description": "Creates a new tab for a user",
+        "parameters": [
+          {
+            "name": "tab",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "user_id": {
+                  "type": "integer",
+                  "description": "ID of the user"
+                },
+                "name": {
+                  "type": "string",
+                  "description": "Name of the tab"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": ["private", "group", "channel", "bot"],
+                  "description": "Type of the tab"
+                },
+                "target_id": {
+                  "type": "integer",
+                  "description": "ID of the target (user, group, channel, or bot)"
+                }
+              },
+              "required": ["user_id", "name", "type", "target_id"]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Tab created successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "user_id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "target_id": {
+                  "type": "integer"
+                },
+                "order": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tabs/list": {
+      "get": {
+        "summary": "List user's tabs",
+        "description": "Returns a list of all tabs for a user",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "description": "ID of the user"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of tabs",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string"
+                  },
+                  "target_id": {
+                    "type": "integer"
+                  },
+                  "order": {
+                    "type": "integer"
+                  },
+                  "created_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tabs/order": {
+      "put": {
+        "summary": "Update tab order",
+        "description": "Updates the order of tabs for a user",
+        "parameters": [
+          {
+            "name": "request",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "user_id": {
+                  "type": "integer",
+                  "description": "ID of the user"
+                },
+                "orders": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer"
+                  },
+                  "description": "Array of tab IDs in their new order"
+                }
+              },
+              "required": ["user_id", "orders"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tab order updated successfully"
+          }
+        }
+      }
+    },
+    "/tabs/delete": {
+      "delete": {
+        "summary": "Delete a tab",
+        "description": "Deletes a tab from the system",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "description": "ID of the tab to delete"
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "description": "ID of the user"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tab deleted successfully"
+          },
+          "404": {
+            "description": "Tab not found"
+          }
+        }
+      }
+    },
+    "/ws": {
+      "get": {
+        "summary": "WebSocket connection",
+        "description": "Establishes a WebSocket connection for real-time communication",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": true,
+            "type": "integer",
+            "description": "ID of the user connecting"
+          }
+        ],
+        "responses": {
+          "101": {
+            "description": "WebSocket connection established"
+          }
+        }
+      }
+    },
+    "/messages": {
+      "post": {
+        "summary": "Send a message",
+        "description": "Sends a message through WebSocket",
+        "parameters": [
+          {
+            "name": "message",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": ["chat", "private", "group", "channel"],
+                  "description": "Type of message"
+                },
+                "user_id": {
+                  "type": "integer",
+                  "description": "ID of the sender"
+                },
+                "content": {
+                  "type": "object",
+                  "description": "Message content"
+                }
+              },
+              "required": ["type", "user_id", "content"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Message sent successfully"
+          }
+        }
+      }
+    },
+    "/messages/{id}": {
+      "get": {
+        "summary": "Get message by ID",
+        "description": "Retrieves a specific message by its ID",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "description": "Message ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Message details",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "user_id": {
+                  "type": "integer"
+                },
+                "content": {
+                  "type": "object"
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Message not found"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update message",
+        "description": "Updates an existing message",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "description": "Message ID"
+          },
+          {
+            "name": "message",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "content": {
+                  "type": "object",
+                  "description": "Updated message content"
+                }
+              },
+              "required": ["content"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Message updated successfully"
+          },
+          "404": {
+            "description": "Message not found"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete message",
+        "description": "Deletes a message",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "description": "Message ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Message deleted successfully"
+          },
+          "404": {
+            "description": "Message not found"
+          }
+        }
+      }
+    },
+    "/messages/history": {
+      "get": {
+        "summary": "Get message history",
+        "description": "Retrieves message history with pagination",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "type": "string",
+            "enum": ["chat", "private", "group", "channel"],
+            "description": "Type of messages to retrieve"
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "type": "integer",
+            "description": "User ID for filtering"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "type": "integer",
+            "description": "Page number"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "type": "integer",
+            "description": "Number of messages per page"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Message history",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "messages": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "integer"
+                      },
+                      "type": {
+                        "type": "string"
+                      },
+                      "user_id": {
+                        "type": "integer"
+                      },
+                      "content": {
+                        "type": "object"
+                      },
+                      "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    }
+                  }
+                },
+                "total": {
+                  "type": "integer"
+                },
+                "page": {
+                  "type": "integer"
+                },
+                "limit": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+} 

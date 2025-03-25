@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Storage Usage Warning</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background-color: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .content {
+            padding: 20px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .button {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: #fff;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 12px;
+            color: #666;
+        }
+        .warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffeeba;
+            color: #856404;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .usage-bar {
+            background-color: #e9ecef;
+            border-radius: 5px;
+            height: 20px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+        .usage-fill {
+            background-color: #ffc107;
+            height: 100%;
+            width: {{.Usage}}%;
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Storage Usage Warning</h1>
+    </div>
+    
+    <div class="content">
+        <p>Hello {{.Username}},</p>
+        
+        <p>This is a notification that your storage usage is approaching the limit of your subscription plan.</p>
+        
+        <div class="warning">
+            <p>Current Storage Usage: {{.Usage}}% of {{.Limit}} GB</p>
+        </div>
+        
+        <div class="usage-bar">
+            <div class="usage-fill"></div>
+        </div>
+        
+        <p>To prevent any service interruptions, you can:</p>
+        <ul>
+            <li>Delete unnecessary files</li>
+            <li>Upgrade your subscription plan for more storage</li>
+            <li>Archive old files</li>
+        </ul>
+        
+        <p>To manage your storage:</p>
+        <a href="https://your-platform.com/storage" class="button">View Storage Usage</a>
+        
+        <p>To upgrade your plan:</p>
+        <a href="https://your-platform.com/subscription" class="button">Upgrade Plan</a>
+        
+        <p>If you need any assistance, please contact our support team.</p>
+        
+        <p>Best regards,<br>The Team</p>
+    </div>
+    
+    <div class="footer">
+        <p>This email was sent to {{.Email}}. If you have any questions, please contact our support team.</p>
+    </div>
+</body>
+</html> 

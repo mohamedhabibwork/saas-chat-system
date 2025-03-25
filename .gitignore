@@ -1,0 +1,104 @@
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Go specific
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work
+
+# Project specific
+/logs/
+/uploads/
+/tmp/
+/dist/
+/build/
+/coverage/
+/node_modules/
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# Kubernetes
+kubeconfig
+*.kubeconfig
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+.terraformrc
+terraform.rc
+
+# SSL/TLS certificates
+*.pem
+*.key
+*.crt
+*.csr
+*.srl
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+
+# Debug files
+debug
+debug.test
+
+# Test coverage
+coverage.txt
+
+# Binary files
+bin/
+*.bin
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Dependency directories
+vendor/
+node_modules/
+bower_components/
+
+# Build output
+dist/
+build/
+out/
+
+# Cache directories
+.cache/
+.npm/
+.yarn/
+
+# Local development
+local/
+dev/ 

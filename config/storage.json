@@ -1,0 +1,43 @@
+{
+    "storage": {
+        "type": "local",
+        "local": {
+            "upload_path": "./uploads",
+            "temp_path": "./temp"
+        },
+        "s3": {
+            "region": "us-west-2",
+            "bucket": "your-bucket-name",
+            "access_key_id": "",
+            "secret_access_key": ""
+        }
+    },
+    "limits": {
+        "max_file_size": 104857600,
+        "allowed_extensions": [
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".gif",
+            ".pdf",
+            ".doc",
+            ".docx",
+            ".xls",
+            ".xlsx",
+            ".zip",
+            ".rar"
+        ],
+        "allowed_mime_types": [
+            "image/jpeg",
+            "image/png",
+            "image/gif",
+            "application/pdf",
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.ms-excel",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/zip",
+            "application/x-rar-compressed"
+        ]
+    }
+} 

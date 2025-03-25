@@ -1,0 +1,62 @@
+{
+    "webrtc": {
+        "ice_servers": [
+            {
+                "urls": [
+                    "stun:stun.l.google.com:19302",
+                    "stun:stun1.l.google.com:19302"
+                ]
+            }
+        ],
+        "ice_candidate_pool_size": 10,
+        "bundle_policy": "max-bundle",
+        "rtcp_mux_policy": "require",
+        "sdp_semantics": "unified-plan"
+    },
+    "websocket": {
+        "read_buffer_size": 1024,
+        "write_buffer_size": 1024,
+        "ping_period": 30,
+        "pong_wait": 60,
+        "write_wait": 10,
+        "allowed_origins": [
+            "http://localhost:3000",
+            "http://localhost:8080"
+        ]
+    },
+    "media": {
+        "video": {
+            "codecs": ["VP8", "VP9", "H264"],
+            "max_bitrate": 2500000,
+            "max_framerate": 30,
+            "max_resolution": {
+                "width": 1920,
+                "height": 1080
+            }
+        },
+        "audio": {
+            "codecs": ["Opus"],
+            "max_bitrate": 128000,
+            "sample_rate": 48000,
+            "channels": 2
+        },
+        "screen_share": {
+            "max_bitrate": 5000000,
+            "max_framerate": 30,
+            "max_resolution": {
+                "width": 3840,
+                "height": 2160
+            }
+        }
+    },
+    "channels": {
+        "max_participants": 10,
+        "default_settings": {
+            "allow_video": true,
+            "allow_audio": true,
+            "allow_screen_share": true,
+            "require_moderation": false,
+            "allow_anonymous": false
+        }
+    }
+} 

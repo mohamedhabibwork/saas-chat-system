@@ -1,0 +1,38 @@
+groups:
+  - name: auto_scaling
+    rules:
+      - alert: HighCPUUsage
+        expr: container_cpu_usage_seconds_total{container_name="api"} > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: High CPU usage detected
+          description: "Container {{ $labels.container_name }} CPU usage is above 80%"
+
+      - alert: HighMemoryUsage
+        expr: container_memory_usage_bytes{container_name="api"} / container_spec_memory_limit_bytes{container_name="api"} > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: High memory usage detected
+          description: "Container {{ $labels.container_name }} memory usage is above 80%"
+
+      - alert: HighRequestRate
+        expr: rate(http_requests_total{container_name="api"}[5m]) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: High request rate detected
+          description: "Request rate is above 100 requests per second"
+
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5..", container_name="api"}[5m]) / rate(http_requests_total{container_name="api"}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: High error rate detected
+          description: "Error rate is above 5%" 

@@ -1,0 +1,267 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      # Application
+      - APP_NAME=platform
+      - APP_ENV=development
+      - APP_DEBUG=true
+      - APP_PORT=8080
+      - APP_URL=http://localhost:8080
+
+      # Database
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=platform
+      - DB_PASSWORD=platform_password
+      - DB_NAME=platform_db
+      - DB_SSL_MODE=disable
+      - DB_MAX_CONNECTIONS=100
+      - DB_IDLE_TIMEOUT=300
+
+      # Redis
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+      - REDIS_DB=0
+      - REDIS_POOL_SIZE=10
+
+      # JWT
+      - JWT_SECRET=your_jwt_secret_key
+      - JWT_EXPIRATION=24h
+      - JWT_REFRESH_EXPIRATION=168h
+
+      # SMTP
+      - SMTP_HOST=smtp.gmail.com
+      - SMTP_PORT=587
+      - SMTP_USER=your_email@gmail.com
+      - SMTP_PASSWORD=your_app_password
+      - SMTP_FROM_NAME=Platform
+      - SMTP_FROM_EMAIL=noreply@your-platform.com
+
+      # AWS S3
+      - AWS_ACCESS_KEY_ID=your_aws_access_key
+      - AWS_SECRET_ACCESS_KEY=your_aws_secret_key
+      - AWS_REGION=us-west-2
+      - AWS_S3_BUCKET=your-platform-bucket
+      - AWS_S3_ENDPOINT=https://s3.amazonaws.com
+
+      # WebSocket
+      - WS_PORT=8081
+      - WS_PING_INTERVAL=30s
+      - WS_PONG_WAIT=60s
+      - WS_WRITE_WAIT=10s
+
+      # Rate Limiting
+      - RATE_LIMIT_REQUESTS=100
+      - RATE_LIMIT_DURATION=1m
+
+      # File Upload
+      - MAX_FILE_SIZE=10485760
+      - ALLOWED_FILE_TYPES=pdf,doc,docx,txt,jpg,jpeg,png,gif
+      - UPLOAD_DIR=/app/uploads
+
+      # Logging
+      - LOG_LEVEL=info
+      - LOG_FORMAT=json
+      - LOG_FILE=/app/logs/app.log
+
+      # Monitoring
+      - PROMETHEUS_ENABLED=true
+      - PROMETHEUS_PORT=9090
+      - GRAFANA_PORT=3000
+
+      # Security
+      - CORS_ALLOWED_ORIGINS=http://localhost:3000,https://your-platform.com
+      - CORS_ALLOWED_METHODS=GET,POST,PUT,DELETE,OPTIONS
+      - CORS_ALLOWED_HEADERS=Authorization,Content-Type
+      - CORS_MAX_AGE=86400
+
+      # Feature Flags
+      - ENABLE_REGISTRATION=true
+      - ENABLE_EMAIL_VERIFICATION=true
+      - ENABLE_PASSWORD_RESET=true
+      - ENABLE_2FA=false
+      - ENABLE_RATE_LIMITING=true
+      - ENABLE_FILE_UPLOAD=true
+      - ENABLE_WEBSOCKET=true
+    volumes:
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+    depends_on:
+      - postgres
+      - redis
+    deploy:
+      replicas: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    networks:
+      - platform-network
+
+  postgres:
+    image: postgres:14-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=platform
+      - POSTGRES_PASSWORD=platform_password
+      - POSTGRES_DB=platform_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - platform-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - platform-network
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/ssl:/etc/nginx/ssl
+    depends_on:
+      - api
+    networks:
+      - platform-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    networks:
+      - platform-network
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+      - ./prometheus/template:/etc/alertmanager/template
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    networks:
+      - platform-network
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - platform-network
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - platform-network
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin_password
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      - prometheus
+    networks:
+      - platform-network
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.0
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - platform-network
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:7.17.0
+    volumes:
+      - ./logstash/pipeline:/usr/share/logstash/pipeline
+      - ./logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml
+    depends_on:
+      - elasticsearch
+    networks:
+      - platform-network
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.17.0
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    depends_on:
+      - elasticsearch
+    networks:
+      - platform-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+  elasticsearch_data:
+
+networks:
+  platform-network:
+    driver: bridge 
