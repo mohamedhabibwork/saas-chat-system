@@ -7,6 +7,7 @@ import { EventEmitter } from 'events';
 import { PlatformSDK } from '../index';
 import { formatTimestamp, getUserTimezone } from '../utils';
 import { ChatEvent } from '../types/events';
+import { TrackingManager } from './tracking-manager';
 
 interface ChatMessage {
   id?: string;
@@ -51,6 +52,7 @@ export class ChatManager extends EventEmitter {
   private encoder: TextEncoder;
   private decoder: TextDecoder;
   private cryptoKeyCache: Map<string, CryptoKey> = new Map();
+  private tracking: TrackingManager;
 
   /**
    * Creates a new ChatManager instance
@@ -59,6 +61,7 @@ export class ChatManager extends EventEmitter {
   constructor(sdk: PlatformSDK, options?: ChatOptions) {
     super();
     this.sdk = sdk;
+    this.tracking = new TrackingManager(sdk);
     
     if (options) {
       this.options = { ...this.options, ...options };
@@ -77,70 +80,81 @@ export class ChatManager extends EventEmitter {
       return;
     }
 
-    const token = await this.sdk.auth.getToken();
-    const baseUrl = this.sdk.config.wsUrl || this.sdk.config.apiUrl.replace(/^http/, 'ws');
-    const wsUrl = `${baseUrl}/ws?token=${token}`;
+    const startTime = Date.now();
+    try {
+      const token = await this.sdk.auth.getToken();
+      const baseUrl = this.sdk.config.wsUrl || this.sdk.config.apiUrl.replace(/^http/, 'ws');
+      const wsUrl = `${baseUrl}/ws?token=${token}`;
 
-    return new Promise((resolve, reject) => {
-      this.socket = new WebSocket(wsUrl);
+      return new Promise((resolve, reject) => {
+        this.socket = new WebSocket(wsUrl);
 
-      this.socket.onopen = () => {
-        this.connected = true;
-        this.emit(ChatEvent.CONNECTED);
-        
-        // Rejoin all previously joined channels
-        this.channels.forEach(channel => {
-          this.joinChannel(channel);
-        });
-        
-        resolve();
-      };
-
-      this.socket.onclose = () => {
-        this.connected = false;
-        this.emit(ChatEvent.DISCONNECTED);
-        
-        // Attempt to reconnect after a delay
-        setTimeout(() => {
-          this.connect();
-        }, 5000);
-      };
-
-      this.socket.onerror = (error) => {
-        this.emit(ChatEvent.ERROR, error);
-        reject(error);
-      };
-
-      this.socket.onmessage = async (event) => {
-        try {
-          const message = JSON.parse(event.data);
+        this.socket.onopen = () => {
+          this.connected = true;
+          this.emit(ChatEvent.CONNECTED);
+          this.tracking.trackChatEvent(ChatEvent.CONNECTED, {
+            connectionTime: Date.now() - startTime
+          });
           
-          // Handle different message types
-          switch (message.type) {
-            case ChatEvent.CHAT_MESSAGE:
-              await this.handleChatMessage(message);
-              break;
-              
-            case ChatEvent.USER_JOINED_WS:
-              this.handleUserJoined(message);
-              break;
-              
-            case ChatEvent.USER_LEFT_WS:
-              this.handleUserLeft(message);
-              break;
-              
-            case ChatEvent.KEY_EXCHANGE:
-              await this.handleKeyExchange(message);
-              break;
-              
-            default:
-              this.emit(ChatEvent.MESSAGE, message);
-          }
-        } catch (error) {
+          // Rejoin all previously joined channels
+          this.channels.forEach(channel => {
+            this.joinChannel(channel);
+          });
+          
+          resolve();
+        };
+
+        this.socket.onclose = () => {
+          this.connected = false;
+          this.emit(ChatEvent.DISCONNECTED);
+          this.tracking.trackChatEvent(ChatEvent.DISCONNECTED);
+          
+          // Attempt to reconnect after a delay
+          setTimeout(() => {
+            this.connect();
+          }, 5000);
+        };
+
+        this.socket.onerror = (error) => {
           this.emit(ChatEvent.ERROR, error);
-        }
-      };
-    });
+          this.tracking.trackError(error, { context: 'websocket_connection' });
+          reject(error);
+        };
+
+        this.socket.onmessage = async (event) => {
+          try {
+            const message = JSON.parse(event.data);
+            
+            // Handle different message types
+            switch (message.type) {
+              case ChatEvent.CHAT_MESSAGE:
+                await this.handleChatMessage(message);
+                break;
+                
+              case ChatEvent.USER_JOINED_WS:
+                this.handleUserJoined(message);
+                break;
+                
+              case ChatEvent.USER_LEFT_WS:
+                this.handleUserLeft(message);
+                break;
+                
+              case ChatEvent.KEY_EXCHANGE:
+                await this.handleKeyExchange(message);
+                break;
+                
+              default:
+                this.emit(ChatEvent.MESSAGE, message);
+            }
+          } catch (error) {
+            this.emit(ChatEvent.ERROR, error);
+          }
+        };
+      });
+    } catch (error) {
+      this.tracking.trackError(error, { context: 'chat_connection' });
+      throw error;
+    }
   }
 
   /**
@@ -168,23 +182,33 @@ export class ChatManager extends EventEmitter {
       await this.connect();
     }
 
-    // Add to tracked channels
-    this.channels.add(channel);
-    
-    // Load initial message history
-    await this.loadMessageHistory(channel);
-    
-    // Get online users
-    await this.getOnlineUsers(channel);
-    
-    // Send join message
-    this.sendToSocket({
-      type: ChatEvent.JOIN_CHANNEL,
-      channel,
-      payload: JSON.stringify({ channel })
-    });
-    
-    this.emit(ChatEvent.CHANNEL_JOINED, channel);
+    const startTime = Date.now();
+    try {
+      // Add to tracked channels
+      this.channels.add(channel);
+      
+      // Load initial message history
+      await this.loadMessageHistory(channel);
+      
+      // Get online users
+      await this.getOnlineUsers(channel);
+      
+      // Send join message
+      this.sendToSocket({
+        type: ChatEvent.JOIN_CHANNEL,
+        channel,
+        payload: JSON.stringify({ channel })
+      });
+      
+      this.emit(ChatEvent.CHANNEL_JOINED, channel);
+      this.tracking.trackChatEvent(ChatEvent.CHANNEL_JOINED, {
+        channel,
+        joinTime: Date.now() - startTime
+      });
+    } catch (error) {
+      this.tracking.trackError(error, { context: 'join_channel', channel });
+      throw error;
+    }
   }
 
   /**
@@ -226,6 +250,7 @@ export class ChatManager extends EventEmitter {
       throw new Error(`Not joined to channel: ${channel}`);
     }
 
+    const startTime = Date.now();
     const messageTimestamp = Date.now();
     
     const message: ChatMessage = {
@@ -238,53 +263,68 @@ export class ChatManager extends EventEmitter {
       attachments
     };
 
-    // Store locally first (optimistic UI)
-    if (!this.messageHistory.has(channel)) {
-      this.messageHistory.set(channel, []);
-    }
-    this.messageHistory.get(channel)?.push(message);
-    this.emit(ChatEvent.MESSAGE_SENT, message);
-
-    // Track pending message
-    if (!this.pendingMessages.has(channel)) {
-      this.pendingMessages.set(channel, []);
-    }
-    this.pendingMessages.get(channel)?.push(message);
-
-    // Prepare the message for sending
-    const messagePayload = {
-      content,
-      attachments,
-      metadata: {
-        clientId: messageTimestamp.toString(),
-        timezone: getUserTimezone()
+    try {
+      // Store locally first (optimistic UI)
+      if (!this.messageHistory.has(channel)) {
+        this.messageHistory.set(channel, []);
       }
-    };
+      this.messageHistory.get(channel)?.push(message);
+      this.emit(ChatEvent.MESSAGE_SENT, message);
+      this.tracking.trackChatEvent(ChatEvent.MESSAGE_SENT, {
+        channel,
+        messageLength: content.length,
+        hasAttachments: attachments && attachments.length > 0
+      });
 
-    // Encrypt the message if encryption is enabled
-    if (this.options.encryption && this.channelKeys.has(channel)) {
-      try {
-        const encryptedData = await this.encryptData(
-          JSON.stringify(messagePayload),
-          channel
-        );
-        
+      // Track pending message
+      if (!this.pendingMessages.has(channel)) {
+        this.pendingMessages.set(channel, []);
+      }
+      this.pendingMessages.get(channel)?.push(message);
+
+      // Prepare the message for sending
+      const messagePayload = {
+        content,
+        attachments,
+        metadata: {
+          clientId: messageTimestamp.toString(),
+          timezone: getUserTimezone()
+        }
+      };
+
+      // Encrypt the message if encryption is enabled
+      if (this.options.encryption && this.channelKeys.has(channel)) {
+        try {
+          const encryptedData = await this.encryptData(
+            JSON.stringify(messagePayload),
+            channel
+          );
+          
+          this.sendToSocket({
+            type: ChatEvent.CHAT_MESSAGE,
+            channel,
+            encryptedData
+          });
+        } catch (error) {
+          this.tracking.trackError(error, { context: 'send_encrypted_message', channel });
+          throw error;
+        }
+      } else {
+        // Fallback to unencrypted message
         this.sendToSocket({
           type: ChatEvent.CHAT_MESSAGE,
           channel,
-          encryptedData
+          payload: JSON.stringify(messagePayload)
         });
-      } catch (error) {
-        this.emit(ChatEvent.ERROR, error);
-        throw error;
       }
-    } else {
-      // Fallback to unencrypted message
-      this.sendToSocket({
-        type: ChatEvent.CHAT_MESSAGE,
+
+      this.tracking.trackMetric('message_send_time', Date.now() - startTime, {
         channel,
-        payload: JSON.stringify(messagePayload)
+        encrypted: this.options.encryption && this.channelKeys.has(channel)
       });
+    } catch (error) {
+      this.tracking.trackError(error, { context: 'send_message', channel });
+      throw error;
     }
   }
 
@@ -403,6 +443,7 @@ export class ChatManager extends EventEmitter {
    * @param message - The message to handle
    */
   private async handleChatMessage(message: any): Promise<void> {
+    const startTime = Date.now();
     const { channel, userId, timestamp, encryptedData, payload } = message;
     
     // Skip if we're not in this channel
@@ -410,53 +451,67 @@ export class ChatManager extends EventEmitter {
       return;
     }
     
-    let messageContent: any;
-    
-    // Handle encrypted message
-    if (encryptedData && this.options.encryption && this.channelKeys.has(channel)) {
-      try {
-        const decryptedData = await this.decryptData(encryptedData, channel);
-        messageContent = JSON.parse(decryptedData);
-      } catch (error) {
-        this.emit(ChatEvent.ERROR, new Error(`Failed to decrypt message: ${error}`));
+    try {
+      let messageContent: any;
+      
+      // Handle encrypted message
+      if (encryptedData && this.options.encryption && this.channelKeys.has(channel)) {
+        try {
+          const decryptedData = await this.decryptData(encryptedData, channel);
+          messageContent = JSON.parse(decryptedData);
+        } catch (error) {
+          this.tracking.trackError(error, { context: 'decrypt_message', channel });
+          this.emit(ChatEvent.ERROR, new Error(`Failed to decrypt message: ${error}`));
+          return;
+        }
+      } else if (payload) {
+        // Handle unencrypted message
+        try {
+          messageContent = typeof payload === 'string' ? JSON.parse(payload) : payload;
+        } catch (error) {
+          this.tracking.trackError(error, { context: 'parse_message', channel });
+          this.emit(ChatEvent.ERROR, new Error(`Failed to parse message payload: ${error}`));
+          return;
+        }
+      } else {
+        this.tracking.trackError(new Error('Invalid message format'), { context: 'handle_message', channel });
+        this.emit(ChatEvent.ERROR, new Error('Invalid message format: no payload or encrypted data'));
         return;
       }
-    } else if (payload) {
-      // Handle unencrypted message
-      try {
-        messageContent = typeof payload === 'string' ? JSON.parse(payload) : payload;
-      } catch (error) {
-        this.emit(ChatEvent.ERROR, new Error(`Failed to parse message payload: ${error}`));
-        return;
+      
+      const messageTimestamp = timestamp || Date.now();
+      
+      // Build the message object
+      const chatMessage: ChatMessage = {
+        userId,
+        channel,
+        content: messageContent.content,
+        timestamp: messageTimestamp,
+        formattedTime: formatTimestamp(messageTimestamp, 'short'),
+        attachments: messageContent.attachments
+      };
+      
+      // Remove from pending if it matches
+      this.removePendingMessage(channel, chatMessage);
+      
+      // Add to message history
+      if (!this.messageHistory.has(channel)) {
+        this.messageHistory.set(channel, []);
       }
-    } else {
-      this.emit(ChatEvent.ERROR, new Error('Invalid message format: no payload or encrypted data'));
-      return;
+      this.messageHistory.get(channel)?.push(chatMessage);
+      
+      // Emit the message event
+      this.emit(ChatEvent.MESSAGE_RECEIVED, chatMessage);
+      this.tracking.trackChatEvent(ChatEvent.MESSAGE_RECEIVED, {
+        channel,
+        messageLength: chatMessage.content.length,
+        hasAttachments: chatMessage.attachments && chatMessage.attachments.length > 0,
+        processingTime: Date.now() - startTime
+      });
+    } catch (error) {
+      this.tracking.trackError(error, { context: 'handle_chat_message', channel });
+      throw error;
     }
-    
-    const messageTimestamp = timestamp || Date.now();
-    
-    // Build the message object
-    const chatMessage: ChatMessage = {
-      userId,
-      channel,
-      content: messageContent.content,
-      timestamp: messageTimestamp,
-      formattedTime: formatTimestamp(messageTimestamp, 'short'),
-      attachments: messageContent.attachments
-    };
-    
-    // Remove from pending if it matches
-    this.removePendingMessage(channel, chatMessage);
-    
-    // Add to message history
-    if (!this.messageHistory.has(channel)) {
-      this.messageHistory.set(channel, []);
-    }
-    this.messageHistory.get(channel)?.push(chatMessage);
-    
-    // Emit the message event
-    this.emit(ChatEvent.MESSAGE_RECEIVED, chatMessage);
   }
 
   /**
@@ -677,6 +732,11 @@ export class ChatManager extends EventEmitter {
     
     // Convert to string
     return this.decoder.decode(decryptedBytes);
+  }
+
+  destroy(): void {
+    this.disconnect();
+    this.tracking.destroy();
   }
 }
 

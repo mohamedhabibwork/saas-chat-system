@@ -252,9 +252,123 @@ const ws = {
             case 'webrtc_signal':
                 this.handleWebRTCSignal(message);
                 break;
+            case 'forum_notification':
+                this.handleForumNotification(message);
+                break;
+            case 'ticket_notification':
+                this.handleTicketNotification(message);
+                break;
         }
     }
 };
+```
+
+## Forum Integration
+
+### Forum Categories
+
+```http
+POST /api/v1/forum/categories
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{
+    "name": "General Discussion",
+    "description": "General topics and discussions",
+    "order": 1
+}
+```
+
+### Forum Topics
+
+```http
+POST /api/v1/forum/topics
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{
+    "category_id": "category-uuid",
+    "title": "Getting Started Guide",
+    "content": "Welcome to our platform! This guide will help you get started...",
+    "pinned": false,
+    "locked": false
+}
+```
+
+### Forum Posts
+
+```http
+POST /api/v1/forum/topics/{topic_id}/posts
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{
+    "content": "Thank you for the guide! It was very helpful.",
+    "user_id": "user-uuid"
+}
+```
+
+### Topic Subscriptions
+
+```http
+POST /api/v1/forum/topics/{topic_id}/subscribe
+Authorization: Bearer <token>
+```
+
+## Push Notifications
+
+### Firebase Cloud Messaging Setup
+
+1. Create a Firebase project in the Firebase Console
+2. Enable Cloud Messaging API
+3. Generate service account credentials
+4. Configure environment variables:
+
+```bash
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_PRIVATE_KEY=your-private-key
+FIREBASE_CLIENT_EMAIL=your-client-email
+```
+
+### Notification Types
+
+1. **Ticket Notifications**:
+   - New ticket assignments
+   - Ticket updates
+   - Status changes
+   - New comments
+
+2. **Forum Notifications**:
+   - New posts in subscribed topics
+   - Topic updates
+   - Category updates
+
+### Notification Preferences
+
+Users can configure their notification preferences for:
+- Email notifications
+- Push notifications
+- Notification frequency
+- Notification types
+
+### Webhook Integration
+
+For custom notification handling:
+
+```http
+POST /api/v1/webhooks/notifications
+Content-Type: application/json
+X-Webhook-Signature: <signature>
+
+{
+    "type": "ticket_assigned",
+    "data": {
+        "ticket_id": "ticket-uuid",
+        "user_id": "user-uuid",
+        "title": "New Ticket Assigned",
+        "message": "You have been assigned to ticket: Support Request"
+    }
+}
 ```
 
 ## Error Handling

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -8,11 +9,17 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
+
+	"github.com/your-project/handlers"
+	"github.com/your-project/middleware"
+	"github.com/your-project/services"
 )
 
 // Error codes
@@ -340,12 +347,65 @@ func createTables(db *sql.DB) error {
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)
 	`)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Create locations table
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS locations (
+			id VARCHAR(36) PRIMARY KEY,
+			user_id VARCHAR(36) NOT NULL,
+			tenant_id VARCHAR(36) NOT NULL,
+			latitude DOUBLE PRECISION NOT NULL,
+			longitude DOUBLE PRECISION NOT NULL,
+			accuracy DOUBLE PRECISION,
+			altitude DOUBLE PRECISION,
+			speed DOUBLE PRECISION,
+			heading DOUBLE PRECISION,
+			timestamp TIMESTAMP NOT NULL,
+			metadata JSONB,
+			created_at TIMESTAMP NOT NULL,
+			updated_at TIMESTAMP NOT NULL
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	// Create location_history table
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS location_history (
+			id VARCHAR(36) PRIMARY KEY,
+			user_id VARCHAR(36) NOT NULL,
+			tenant_id VARCHAR(36) NOT NULL,
+			locations JSONB NOT NULL,
+			start_time TIMESTAMP NOT NULL,
+			end_time TIMESTAMP NOT NULL,
+			created_at TIMESTAMP NOT NULL,
+			updated_at TIMESTAMP NOT NULL
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func getEnv(key, fallback string) string {
 	if value, exists := os.LookupEnv(key); exists {
 		return value
+	}
+	return fallback
+}
+
+func getEnvAsInt(key string, fallback int) int {
+	if value, exists := os.LookupEnv(key); exists {
+		intValue, err := strconv.Atoi(value)
+		if err == nil {
+			return intValue
+		}
 	}
 	return fallback
 }
@@ -645,532 +705,167 @@ func main() {
 	hub := newHub()
 	go hub.run()
 
-	// HTTP routes
-	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		handleWebSocket(hub, w, r)
-	})
+	// Initialize tracking service
+	trackingService := services.NewTrackingService(db)
+	trackingHandler := handlers.NewTrackingHandler(trackingService)
 
-	// Tenant registration endpoint
-	http.HandleFunc("/tenants", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			respondWithError(w, NewAPIError(http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed"))
-			return
-		}
-
-		var tenant struct {
-			Name string `json:"name"`
-		}
-
-		if err := json.NewDecoder(r.Body).Decode(&tenant); err != nil {
-			respondWithError(w, NewAPIError(http.StatusBadRequest, ErrBadRequest, "Invalid request body"))
-			return
-		}
-
-		var tenantID int
-		err := db.QueryRow("INSERT INTO tenants (name) VALUES ($1) RETURNING id", tenant.Name).Scan(&tenantID)
-		if err != nil {
-			respondWithError(w, NewAPIError(http.StatusBadRequest, ErrDuplicateEntry, "Tenant name already exists"))
-			return
-		}
-
-		resp := map[string]interface{}{"id": tenantID, "name": tenant.Name}
-		respondWithJSON(w, http.StatusCreated, resp)
-	})
-
-	// User registration endpoint
-	http.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			respondWithError(w, NewAPIError(http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed"))
-			return
-		}
-
-		var user struct {
-			Username string `json:"username"`
-			Password string `json:"password"`
-			TenantID int    `json:"tenant_id"`
-		}
-
-		if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-			respondWithError(w, NewAPIError(http.StatusBadRequest, ErrBadRequest, "Invalid request body"))
-			return
-		}
-
-		var userID int
-		err := db.QueryRow("INSERT INTO users (username, password, tenant_id) VALUES ($1, $2, $3) RETURNING id",
-			user.Username, user.Password, user.TenantID).Scan(&userID)
-		if err != nil {
-			respondWithError(w, NewAPIError(http.StatusBadRequest, ErrDuplicateEntry, "Username already exists in this tenant"))
-			return
-		}
-
-		resp := map[string]interface{}{"id": userID, "username": user.Username, "tenant_id": user.TenantID}
-		respondWithJSON(w, http.StatusCreated, resp)
-	})
-
-	// User preferences endpoint
-	http.HandleFunc("/user/preferences", func(w http.ResponseWriter, r *http.Request) {
-		// Extract user ID from auth token or session
-		userIDStr := r.URL.Query().Get("user_id")
-		if userIDStr == "" {
-			respondWithError(w, NewAPIError(http.StatusBadRequest, ErrBadRequest, "user_id is required"))
-			return
-		}
+	// Register tracking routes
+	tracking := r.Group("/api/v1/tracking")
+	tracking.Use(middleware.AuthRequired())
+	{
+		// Event tracking endpoints
+		tracking.POST("/events", trackingHandler.TrackEvents)
+		tracking.GET("/events", trackingHandler.GetEvents)
 		
-		var userID int
-		fmt.Sscanf(userIDStr, "%d", &userID)
+		// Metric tracking endpoints
+		tracking.POST("/metrics", trackingHandler.TrackMetrics)
+		tracking.GET("/metrics", trackingHandler.GetMetrics)
 		
-		if r.Method == http.MethodGet {
-			// Get user's timezone from database
-			var timezone string
-			err := db.QueryRow("SELECT timezone FROM users WHERE id = $1", userID).Scan(&timezone)
-			if err != nil {
-				timezone = "UTC" // Default to UTC if not found
-			}
-
-			// Return user preferences
-			prefs := map[string]interface{}{
-				"timezone": timezone,
-			}
-
-			respondWithJSON(w, http.StatusOK, prefs)
-		} else if r.Method == http.MethodPut || r.Method == http.MethodPost {
-			// Parse request body
-			var prefs struct {
-				Timezone string `json:"timezone"`
-			}
-			
-			if err := json.NewDecoder(r.Body).Decode(&prefs); err != nil {
-				respondWithError(w, NewAPIError(http.StatusBadRequest, ErrBadRequest, "Invalid request body"))
-				return
-			}
-
-			// Validate timezone
-			if prefs.Timezone != "" {
-				_, err := time.LoadLocation(prefs.Timezone)
-				if err != nil {
-					respondWithError(w, NewAPIError(http.StatusBadRequest, ErrBadRequest, "Invalid timezone"))
-					return
-				}
-			}
-
-			// Update user's timezone in database
-			_, err := db.Exec("UPDATE users SET timezone = $1 WHERE id = $2", 
-				prefs.Timezone, userID)
-			if err != nil {
-				respondWithError(w, NewAPIError(http.StatusInternalServerError, ErrInternalServerError, "Failed to update preferences"))
-				return
-			}
-
-			// Return updated preferences
-			respondWithJSON(w, http.StatusOK, prefs)
-		} else {
-			respondWithError(w, NewAPIError(http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed"))
-		}
-	})
-	
-	// Timezone list endpoint
-	http.HandleFunc("/timezones", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			respondWithError(w, NewAPIError(http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed"))
-			return
-		}
+		// Error tracking endpoints
+		tracking.POST("/errors", trackingHandler.TrackErrors)
+		tracking.GET("/errors", trackingHandler.GetErrors)
 		
-		// This is a simplified list of timezones
-		// In a real app, you might want to generate this dynamically or include more information
-		timezones := []string{
-			"UTC",
-			"Europe/London",
-			"Europe/Paris",
-			"Europe/Berlin",
-			"America/New_York",
-			"America/Chicago",
-			"America/Denver",
-			"America/Los_Angeles",
-			"Asia/Tokyo",
-			"Asia/Shanghai",
-			"Asia/Kolkata",
-			"Australia/Sydney",
-			"Pacific/Auckland",
-		}
+		// Statistics endpoint
+		tracking.GET("/stats", trackingHandler.GetTrackingStats)
+		
+		// Maintenance endpoint
+		tracking.POST("/cleanup", trackingHandler.CleanupOldData)
+	}
 
-		respondWithJSON(w, http.StatusOK, map[string]interface{}{
-			"timezones": timezones,
-		})
-	})
+	// Initialize location service
+	locationService := services.NewLocationService(db)
+	locationHandler := handlers.NewLocationHandler(locationService)
 
-	// Group management endpoint
-	http.HandleFunc("/groups", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost {
-			var group struct {
-				Name     string `json:"name"`
-				TenantID int    `json:"tenant_id"`
-			}
+	// Register location routes
+	location := r.Group("/api/v1/location")
+	location.Use(middleware.AuthRequired())
+	{
+		// Current location endpoints
+		location.POST("/current", locationHandler.UpdateLocation)
+		location.GET("/current", locationHandler.GetCurrentLocation)
+		
+		// History endpoints
+		location.GET("/history", locationHandler.GetLocationHistory)
+		location.POST("/history", locationHandler.SaveLocationHistory)
+		
+		// Statistics endpoint
+		location.GET("/stats", locationHandler.GetLocationStats)
+	}
 
-			if err := json.NewDecoder(r.Body).Decode(&group); err != nil {
-				respondWithError(w, NewAPIError(http.StatusBadRequest, ErrBadRequest, "Invalid request body"))
-				return
-			}
+	// Initialize reporting service
+	reportingService := services.NewReportingService(db)
+	reportingHandler := handlers.NewReportingHandler(reportingService)
 
-			var groupID int
-			err := db.QueryRow("INSERT INTO groups (name, tenant_id) VALUES ($1, $2) RETURNING id",
-				group.Name, group.TenantID).Scan(&groupID)
+	// Register reporting routes
+	api.POST("/reports/user-activity", reportingHandler.GenerateUserActivityReport)
+	api.POST("/reports/location", reportingHandler.GenerateLocationReport)
+	api.POST("/reports/system-health", reportingHandler.GenerateSystemHealthReport)
+
+	// Initialize email service
+	emailService := services.NewEmailService(
+		getEnv("SMTP_HOST", "smtp.gmail.com"),
+		getEnvAsInt("SMTP_PORT", 587),
+		getEnv("SMTP_USERNAME", ""),
+		getEnv("SMTP_PASSWORD", ""),
+		getEnv("SMTP_FROM_EMAIL", "noreply@yourdomain.com"),
+		getEnv("SMTP_FROM_NAME", "Chat System Reports"),
+	)
+
+	// Initialize Firebase Cloud Messaging client
+	fcmClient := services.NewFCMClient(
+		getEnv("FIREBASE_PROJECT_ID", ""),
+		getEnv("FIREBASE_PRIVATE_KEY", ""),
+		getEnv("FIREBASE_CLIENT_EMAIL", ""),
+	)
+
+	// Initialize notification service
+	notificationService := services.NewNotificationService(emailService, fcmClient)
+
+	// Initialize scheduler service
+	schedulerService := services.NewSchedulerService(db, reportingService, emailService)
+	schedulerHandler := handlers.NewSchedulerHandler(schedulerService)
+
+	// Start scheduler service
+	if err := schedulerService.Start(context.Background()); err != nil {
+		log.Fatal("Failed to start scheduler service:", err)
+	}
+	defer schedulerService.Stop()
+
+	// Register scheduler routes
+	scheduler := r.Group("/api/v1/scheduler")
+	scheduler.Use(middleware.AuthRequired())
+	{
+		// Report schedule management endpoints
+		scheduler.POST("/schedules", schedulerHandler.CreateSchedule)
+		scheduler.GET("/schedules", schedulerHandler.ListSchedules)
+		scheduler.GET("/schedules/:id", schedulerHandler.GetSchedule)
+		scheduler.PUT("/schedules/:id", schedulerHandler.UpdateSchedule)
+		scheduler.DELETE("/schedules/:id", schedulerHandler.DeleteSchedule)
+	}
+
+	// Initialize ticket service with notification service
+	ticketService := services.NewTicketService(db, notificationService)
+	ticketHandler := handlers.NewTicketHandler(ticketService)
+
+	// Register ticket routes
+	tickets := r.Group("/api/v1/tickets")
+	tickets.Use(middleware.AuthRequired())
+	{
+		// Ticket management endpoints
+		tickets.POST("", ticketHandler.CreateTicket)
+		tickets.GET("", ticketHandler.ListTickets)
+		tickets.GET("/:id", ticketHandler.GetTicket)
+		tickets.PUT("/:id", ticketHandler.UpdateTicket)
+		tickets.PUT("/:id/status", ticketHandler.UpdateTicketStatus)
+
+		// Comment endpoints
+		tickets.POST("/:id/comments", ticketHandler.AddComment)
+		tickets.GET("/:id/comments", ticketHandler.GetComments)
+
+		// Attachment endpoints
+		tickets.POST("/:id/attachments", ticketHandler.UploadAttachment)
+		tickets.GET("/:id/attachments", ticketHandler.GetAttachments)
+		tickets.DELETE("/:id/attachments/:attachment_id", ticketHandler.DeleteAttachment)
+	}
+
+	// Start cleanup job for old tracking data
+	go func() {
+		ticker := time.NewTicker(24 * time.Hour)
+		for range ticker.C {
+			err := trackingHandler.CleanupOldData(context.Background())
 			if err != nil {
-				respondWithError(w, NewAPIError(http.StatusBadRequest, ErrDuplicateEntry, "Group creation failed"))
-				return
-			}
-
-			resp := map[string]interface{}{"id": groupID, "name": group.Name, "tenant_id": group.TenantID}
-			respondWithJSON(w, http.StatusCreated, resp)
-		} else if r.Method == http.MethodGet {
-			tenantID := r.URL.Query().Get("tenant_id")
-			if tenantID == "" {
-				respondWithError(w, NewAPIError(http.StatusBadRequest, ErrBadRequest, "tenant_id is required"))
-				return
-			}
-
-			rows, err := db.Query("SELECT id, name FROM groups WHERE tenant_id = $1", tenantID)
-			if err != nil {
-				respondWithError(w, NewAPIError(http.StatusInternalServerError, ErrInternalServerError, "Failed to fetch groups"))
-				return
-			}
-			defer func(rows *sql.Rows) {
-				_ = rows.Close()
-			}(rows)
-
-			var groups []map[string]interface{}
-			for rows.Next() {
-				var id int
-				var name string
-				if err := rows.Scan(&id, &name); err != nil {
-					continue
-				}
-				groups = append(groups, map[string]interface{}{"id": id, "name": name})
-			}
-
-			respondWithJSON(w, http.StatusOK, groups)
-		} else {
-			respondWithError(w, NewAPIError(http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed"))
-		}
-	})
-
-	// Group membership endpoint
-	http.HandleFunc("/group-members", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost {
-			var membership struct {
-				GroupID int `json:"group_id"`
-				UserID  int `json:"user_id"`
-			}
-
-			if err := json.NewDecoder(r.Body).Decode(&membership); err != nil {
-				respondWithError(w, NewAPIError(http.StatusBadRequest, ErrBadRequest, "Invalid request body"))
-				return
-			}
-
-			_, err := db.Exec("INSERT INTO group_members (group_id, user_id) VALUES ($1, $2)",
-				membership.GroupID, membership.UserID)
-			if err != nil {
-				respondWithError(w, NewAPIError(http.StatusBadRequest, ErrBadRequest, "Failed to add member to group"))
-				return
-			}
-
-			respondWithJSON(w, http.StatusCreated, map[string]string{"status": "success"})
-		} else {
-			respondWithError(w, NewAPIError(http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed"))
-		}
-	})
-
-	// Topic management endpoint
-	http.HandleFunc("/topics", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost {
-			var topic struct {
-				Name     string `json:"name"`
-				TenantID int    `json:"tenant_id"`
-			}
-
-			if err := json.NewDecoder(r.Body).Decode(&topic); err != nil {
-				respondWithError(w, NewAPIError(http.StatusBadRequest, ErrBadRequest, "Invalid request body"))
-				return
-			}
-
-			var topicID int
-			err := db.QueryRow("INSERT INTO topics (name, tenant_id) VALUES ($1, $2) RETURNING id",
-				topic.Name, topic.TenantID).Scan(&topicID)
-			if err != nil {
-				respondWithError(w, NewAPIError(http.StatusBadRequest, ErrDuplicateEntry, "Topic creation failed"))
-				return
-			}
-
-			resp := map[string]interface{}{"id": topicID, "name": topic.Name, "tenant_id": topic.TenantID}
-			respondWithJSON(w, http.StatusCreated, resp)
-		} else if r.Method == http.MethodGet {
-			tenantID := r.URL.Query().Get("tenant_id")
-			if tenantID == "" {
-				respondWithError(w, NewAPIError(http.StatusBadRequest, ErrBadRequest, "tenant_id is required"))
-				return
-			}
-
-			rows, err := db.Query("SELECT id, name FROM topics WHERE tenant_id = $1", tenantID)
-			if err != nil {
-				respondWithError(w, NewAPIError(http.StatusInternalServerError, ErrInternalServerError, "Failed to fetch topics"))
-				return
-			}
-			defer func(rows *sql.Rows) {
-				_ = rows.Close()
-			}(rows)
-
-			var topics []map[string]interface{}
-			for rows.Next() {
-				var id int
-				var name string
-				if err := rows.Scan(&id, &name); err != nil {
-					continue
-				}
-				topics = append(topics, map[string]interface{}{"id": id, "name": name})
-			}
-
-			respondWithJSON(w, http.StatusOK, topics)
-		} else {
-			respondWithError(w, NewAPIError(http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed"))
-		}
-	})
-
-	// Topic subscription endpoint
-	http.HandleFunc("/topic-subscriptions", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost {
-			var subscription struct {
-				TopicID int `json:"topic_id"`
-				UserID  int `json:"user_id"`
-			}
-
-			if err := json.NewDecoder(r.Body).Decode(&subscription); err != nil {
-				respondWithError(w, NewAPIError(http.StatusBadRequest, ErrBadRequest, "Invalid request body"))
-				return
-			}
-
-			_, err := db.Exec("INSERT INTO topic_subscriptions (topic_id, user_id) VALUES ($1, $2)",
-				subscription.TopicID, subscription.UserID)
-			if err != nil {
-				respondWithError(w, NewAPIError(http.StatusBadRequest, ErrBadRequest, "Failed to add subscription"))
-				return
-			}
-
-			respondWithJSON(w, http.StatusCreated, map[string]string{"status": "success"})
-		} else {
-			respondWithError(w, NewAPIError(http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed"))
-		}
-	})
-
-	// Message history endpoint
-	http.HandleFunc("/messages", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			respondWithError(w, NewAPIError(http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed"))
-			return
-		}
-
-		// Get query parameters
-		tenantID := r.URL.Query().Get("tenant_id")
-		messageType := r.URL.Query().Get("type") // "private", "group", "notification"
-		userID := r.URL.Query().Get("user_id")
-		otherUserID := r.URL.Query().Get("other_user_id") // For private messages
-		groupID := r.URL.Query().Get("group_id")          // For group messages
-		topicName := r.URL.Query().Get("topic_name")      // For topic messages
-		limit := r.URL.Query().Get("limit")
-		offset := r.URL.Query().Get("offset")
-
-		if tenantID == "" || messageType == "" || userID == "" {
-			respondWithError(w, NewAPIError(http.StatusBadRequest, ErrBadRequest, "tenant_id, type, and user_id are required"))
-			return
-		}
-
-		// Set defaults for pagination
-		if limit == "" {
-			limit = "50"
-		}
-		if offset == "" {
-			offset = "0"
-		}
-
-		var rows *sql.Rows
-		var err error
-
-		switch messageType {
-		case "private":
-			if otherUserID == "" {
-				respondWithError(w, NewAPIError(http.StatusBadRequest, ErrBadRequest, "other_user_id is required for private messages"))
-				return
-			}
-			// Get private messages between two users
-			rows, err = db.Query(`
-                SELECT m.id, m.content, m.created_at, 
-                       u1.username as sender_username, m.sender_id,
-                       u2.username as receiver_username, m.receiver_id
-                FROM messages m
-                JOIN users u1 ON m.sender_id = u1.id
-                JOIN users u2 ON m.receiver_id = u2.id
-                WHERE m.tenant_id = $1 
-                  AND m.message_type = 'private'
-                  AND ((m.sender_id = $2 AND m.receiver_id = $3) OR (m.sender_id = $3 AND m.receiver_id = $2))
-                ORDER BY m.created_at DESC
-                LIMIT $4 OFFSET $5
-            `, tenantID, userID, otherUserID, limit, offset)
-
-		case "group":
-			if groupID == "" {
-				respondWithError(w, NewAPIError(http.StatusBadRequest, ErrBadRequest, "group_id is required for group messages"))
-				return
-			}
-			// Verify user is a member of this group
-			var isMember bool
-			err = db.QueryRow("SELECT EXISTS(SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2)",
-				groupID, userID).Scan(&isMember)
-			if err != nil || !isMember {
-				respondWithError(w, NewAPIError(http.StatusForbidden, "FORBIDDEN", "User is not a member of this group"))
-				return
-			}
-
-			// Get group messages
-			rows, err = db.Query(`
-                SELECT m.id, m.content, m.created_at, 
-                       u.username as sender_username, m.sender_id,
-                       g.name as group_name, g.id as group_id
-                FROM messages m
-                JOIN users u ON m.sender_id = u.id
-                JOIN groups g ON m.group_id = g.id
-                WHERE m.tenant_id = $1 
-                  AND m.message_type = 'group'
-                  AND m.group_id = $2
-                ORDER BY m.created_at DESC
-                LIMIT $3 OFFSET $4
-            `, tenantID, groupID, limit, offset)
-
-		case "notification":
-			if topicName == "" {
-				respondWithError(w, NewAPIError(http.StatusBadRequest, ErrBadRequest, "topic_name is required for notifications"))
-				return
-			}
-
-			// Get topic ID
-			var topicID int
-			err = db.QueryRow("SELECT id FROM topics WHERE name = $1 AND tenant_id = $2",
-				topicName, tenantID).Scan(&topicID)
-			if err != nil {
-				respondWithError(w, NewAPIError(http.StatusBadRequest, ErrBadRequest, "Topic not found"))
-				return
-			}
-
-			// Verify user is subscribed to this topic
-			var isSubscribed bool
-			err = db.QueryRow("SELECT EXISTS(SELECT 1 FROM topic_subscriptions WHERE topic_id = $1 AND user_id = $2)",
-				topicID, userID).Scan(&isSubscribed)
-			if err != nil || !isSubscribed {
-				respondWithError(w, NewAPIError(http.StatusForbidden, "FORBIDDEN", "User is not subscribed to this topic"))
-				return
-			}
-
-			// Get topic messages
-			rows, err = db.Query(`
-                SELECT m.id, m.content, m.created_at, 
-                       u.username as sender_username, m.sender_id,
-                       t.name as topic_name
-                FROM messages m
-                JOIN users u ON m.sender_id = u.id
-                JOIN topics t ON m.topic_id = t.id
-                WHERE m.tenant_id = $1 
-                  AND m.message_type = 'notification'
-                  AND t.name = $2
-                ORDER BY m.created_at DESC
-                LIMIT $3 OFFSET $4
-            `, tenantID, topicName, limit, offset)
-
-		default:
-			respondWithError(w, NewAPIError(http.StatusBadRequest, ErrBadRequest, "Invalid message type"))
-			return
-		}
-
-		if err != nil {
-			log.Println("Database error:", err)
-			respondWithError(w, NewAPIError(http.StatusInternalServerError, ErrInternalServerError, "Failed to fetch messages"))
-			return
-		}
-		defer rows.Close()
-
-		var messages []map[string]interface{}
-		for rows.Next() {
-			switch messageType {
-			case "private":
-				var id int
-				var content string
-				var createdAt time.Time
-				var senderUsername string
-				var senderID int
-				var receiverUsername string
-				var receiverID int
-
-				if err := rows.Scan(&id, &content, &createdAt, &senderUsername, &senderID, &receiverUsername, &receiverID); err != nil {
-					continue
-				}
-
-				messages = append(messages, map[string]interface{}{
-					"id":          id,
-					"content":     content,
-					"timestamp":   createdAt,
-					"sender":      senderUsername,
-					"sender_id":   senderID,
-					"receiver":    receiverUsername,
-					"receiver_id": receiverID,
-					"type":        "private",
-				})
-
-			case "group":
-				var id int
-				var content string
-				var createdAt time.Time
-				var senderUsername string
-				var senderID int
-				var groupName string
-				var groupID int
-
-				if err := rows.Scan(&id, &content, &createdAt, &senderUsername, &senderID, &groupName, &groupID); err != nil {
-					continue
-				}
-
-				messages = append(messages, map[string]interface{}{
-					"id":         id,
-					"content":    content,
-					"timestamp":  createdAt,
-					"sender":     senderUsername,
-					"sender_id":  senderID,
-					"group_name": groupName,
-					"group_id":   groupID,
-					"type":       "group",
-				})
-
-			case "notification":
-				var id int
-				var content string
-				var createdAt time.Time
-				var senderUsername string
-				var senderID int
-				var topicName string
-
-				if err := rows.Scan(&id, &content, &createdAt, &senderUsername, &senderID, &topicName); err != nil {
-					continue
-				}
-
-				messages = append(messages, map[string]interface{}{
-					"id":         id,
-					"content":    content,
-					"timestamp":  createdAt,
-					"sender":     senderUsername,
-					"sender_id":  senderID,
-					"topic_name": topicName,
-					"type":       "notification",
-				})
+				log.Println("Error cleaning up old tracking data:", err)
 			}
 		}
+	}()
 
-		respondWithJSON(w, http.StatusOK, messages)
-	})
+	// Initialize forum service
+	forumService := services.NewForumService(db)
+	forumHandler := handlers.NewForumHandler(forumService)
+
+	// Register forum routes
+	forum := r.Group("/api/v1/forum")
+	{
+		// Categories
+		forum.POST("/categories", forumHandler.CreateCategory)
+		forum.GET("/categories", forumHandler.GetCategories)
+
+		// Topics
+		forum.POST("/topics", forumHandler.CreateTopic)
+		forum.GET("/categories/:id/topics", forumHandler.GetTopics)
+		forum.PUT("/topics/:id", forumHandler.UpdateTopic)
+		forum.DELETE("/topics/:id", forumHandler.DeleteTopic)
+
+		// Posts
+		forum.POST("/topics/:id/posts", forumHandler.CreatePost)
+		forum.GET("/topics/:id/posts", forumHandler.GetPosts)
+		forum.PUT("/posts/:id", forumHandler.UpdatePost)
+		forum.DELETE("/posts/:id", forumHandler.DeletePost)
+
+		// Subscriptions
+		forum.POST("/topics/:id/subscribe", forumHandler.SubscribeToTopic)
+		forum.DELETE("/topics/:id/subscribe", forumHandler.UnsubscribeFromTopic)
+	}
 
 	// Start the server
 	port := getEnv("PORT", "8080")

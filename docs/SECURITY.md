@@ -92,6 +92,83 @@ Example encryption configuration:
 - Connection rate limiting
 - Automatic reconnection with exponential backoff
 
+## Forum Security
+
+### Access Control
+
+1. **Category Access**:
+   - Categories are tenant-isolated
+   - Access is controlled by tenant-specific permissions
+   - Categories can be restricted to specific user roles
+
+2. **Topic Access**:
+   - Topics inherit category permissions
+   - Topics can be locked to prevent new posts
+   - Topics can be pinned for important announcements
+
+3. **Post Access**:
+   - Posts are visible to users with topic access
+   - Post editing is restricted to post authors and moderators
+   - Post deletion requires moderator privileges
+
+### Content Moderation
+
+1. **Content Filtering**:
+   - Profanity filtering
+   - Spam detection
+   - Link validation
+   - File attachment scanning
+
+2. **Rate Limiting**:
+   - Post creation limits
+   - Comment frequency limits
+   - Topic creation limits
+   - Category creation limits
+
+## Notification Security
+
+### Push Notification Security
+
+1. **Firebase Cloud Messaging**:
+   - Secure token management
+   - Token rotation
+   - Device verification
+   - Message encryption
+
+2. **Notification Permissions**:
+   - User consent management
+   - Permission revocation
+   - Notification preferences
+   - Tenant-specific settings
+
+### Email Notification Security
+
+1. **Email Delivery**:
+   - TLS encryption
+   - SPF records
+   - DKIM signatures
+   - DMARC policies
+
+2. **Email Content**:
+   - HTML sanitization
+   - Link validation
+   - Attachment scanning
+   - Rate limiting
+
+### Webhook Security
+
+1. **Authentication**:
+   - HMAC signatures
+   - API key validation
+   - IP whitelisting
+   - Request validation
+
+2. **Data Protection**:
+   - Payload encryption
+   - Sensitive data masking
+   - Audit logging
+   - Rate limiting
+
 ## Best Practices
 
 ### For Developers
@@ -158,4 +235,5 @@ For security-related issues or vulnerabilities:
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2024-03-01 | Initial release with E2EE |
-| 1.1.0 | 2024-03-15 | Added key rotation | 
+| 1.1.0 | 2024-03-15 | Added key rotation |
+| 1.2.0 | 2024-03-26 | Added forum and notification security | 

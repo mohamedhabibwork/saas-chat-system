@@ -1,0 +1,1778 @@
+openapi: 3.0.0
+info:
+  title: Chat System API
+  version: 1.0.0
+  description: API documentation for the chat system with tracking and location features
+
+servers:
+  - url: /api/v1
+    description: API v1
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    TrackingEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        event_type:
+          type: string
+          enum: [user_event, chat_event, system_event, error_event]
+        timestamp:
+          type: string
+          format: date-time
+        user_id:
+          type: string
+        tenant_id:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    TrackingMetric:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        value:
+          type: number
+        timestamp:
+          type: string
+          format: date-time
+        user_id:
+          type: string
+        tenant_id:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    TrackingError:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        message:
+          type: string
+        stack:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        user_id:
+          type: string
+        tenant_id:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Location:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+        tenant_id:
+          type: string
+        latitude:
+          type: number
+          format: float
+        longitude:
+          type: number
+          format: float
+        accuracy:
+          type: number
+          format: float
+        altitude:
+          type: number
+          format: float
+        speed:
+          type: number
+          format: float
+        heading:
+          type: number
+          format: float
+        timestamp:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    LocationHistory:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+        tenant_id:
+          type: string
+        locations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Location'
+        start_time:
+          type: string
+          format: date-time
+        end_time:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    LocationStats:
+      type: object
+      properties:
+        total_locations:
+          type: integer
+        total_history:
+          type: integer
+        last_location:
+          $ref: '#/components/schemas/Location'
+        last_update:
+          type: string
+          format: date-time
+        average_speed:
+          type: number
+          format: float
+        max_speed:
+          type: number
+          format: float
+        total_distance:
+          type: number
+          format: float
+
+    ReportOptions:
+      type: object
+      properties:
+        startTime:
+          type: string
+          format: date-time
+          description: Start time for the report period
+        endTime:
+          type: string
+          format: date-time
+          description: End time for the report period
+        userId:
+          type: string
+          description: User ID for filtering report data
+        tenantId:
+          type: string
+          description: Tenant ID for filtering report data
+        format:
+          type: string
+          enum: [json, csv, pdf]
+          description: Desired output format for the report
+
+    Report:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the report
+        type:
+          type: string
+          enum: [user_activity, location, system_health]
+          description: Type of report generated
+        options:
+          $ref: '#/components/schemas/ReportOptions'
+        data:
+          oneOf:
+            - $ref: '#/components/schemas/UserActivityReportData'
+            - $ref: '#/components/schemas/LocationReportData'
+            - $ref: '#/components/schemas/SystemHealthReportData'
+        createdAt:
+          type: string
+          format: date-time
+          description: When the report was generated
+        status:
+          type: string
+          enum: [pending, completed, failed]
+          description: Current status of the report
+        error:
+          type: string
+          description: Error message if report generation failed
+
+    UserActivityReportData:
+      type: object
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrackingEvent'
+        metrics:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrackingMetric'
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrackingError'
+        summary:
+          type: object
+          properties:
+            event_counts:
+              type: object
+              additionalProperties:
+                type: integer
+            metric_averages:
+              type: object
+              additionalProperties:
+                type: number
+            error_counts:
+              type: object
+              additionalProperties:
+                type: integer
+
+    LocationReportData:
+      type: object
+      properties:
+        locations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Location'
+        stats:
+          $ref: '#/components/schemas/LocationStats'
+        summary:
+          type: object
+          properties:
+            total_points:
+              type: integer
+            total_distance:
+              type: number
+            average_speed:
+              type: number
+            max_speed:
+              type: number
+            start_time:
+              type: string
+              format: date-time
+            end_time:
+              type: string
+              format: date-time
+            duration:
+              type: number
+
+    SystemHealthReportData:
+      type: object
+      properties:
+        metrics:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrackingMetric'
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrackingError'
+        summary:
+          type: object
+          properties:
+            metric_averages:
+              type: object
+              additionalProperties:
+                type: number
+            error_counts:
+              type: object
+              additionalProperties:
+                type: integer
+
+    ReportSchedule:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+        name:
+          type: string
+          description: Name of the report schedule
+        type:
+          type: string
+          enum: [user_activity, location, system_health]
+          description: Type of report to generate
+        frequency:
+          type: string
+          enum: [daily, weekly, monthly]
+          description: How often to generate the report
+        day_of_week:
+          type: integer
+          minimum: 0
+          maximum: 6
+          description: Day of week for weekly reports (0-6)
+        day_of_month:
+          type: integer
+          minimum: 1
+          maximum: 31
+          description: Day of month for monthly reports (1-31)
+        time_of_day:
+          type: string
+          pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'
+          description: Time of day to generate report (HH:MM)
+        recipients:
+          type: array
+          items:
+            type: string
+            format: email
+          description: List of email recipients
+        format:
+          type: string
+          enum: [json, csv, pdf]
+          description: Format of the report
+        options:
+          type: object
+          description: Report generation options
+        last_run:
+          type: string
+          format: date-time
+          description: When the report was last generated
+        next_run:
+          type: string
+          format: date-time
+          description: When the report will be generated next
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Subscription:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+        plan:
+          type: string
+          enum: [free, basic, pro, enterprise]
+        status:
+          type: string
+          enum: [active, suspended, cancelled]
+        start_date:
+          type: string
+          format: date-time
+        end_date:
+          type: string
+          format: date-time
+        auto_renew:
+          type: boolean
+        payment_method:
+          type: string
+        billing_email:
+          type: string
+          format: email
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Ticket:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+        user_id:
+          type: string
+        title:
+          type: string
+          description: Title of the ticket
+        description:
+          type: string
+          description: Detailed description of the issue
+        category:
+          type: string
+          enum: [bug, feature, support, security, other]
+          description: Category of the ticket
+        priority:
+          type: string
+          enum: [low, medium, high, urgent]
+          description: Priority level of the ticket
+        status:
+          type: string
+          enum: [open, pending, resolved, closed]
+          description: Current status of the ticket
+        assigned_to:
+          type: string
+          description: ID of the user assigned to the ticket
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        resolved_at:
+          type: string
+          format: date-time
+          description: When the ticket was resolved
+        closed_at:
+          type: string
+          format: date-time
+          description: When the ticket was closed
+
+    TicketComment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        ticket_id:
+          type: string
+        user_id:
+          type: string
+        content:
+          type: string
+          description: Content of the comment
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    TicketAttachment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        ticket_id:
+          type: string
+        comment_id:
+          type: string
+          description: Optional ID of the comment this attachment belongs to
+        file_name:
+          type: string
+          description: Name of the attached file
+        file_type:
+          type: string
+          description: MIME type of the file
+        file_size:
+          type: integer
+          description: Size of the file in bytes
+        file_url:
+          type: string
+          description: URL to download the file
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ForumCategory:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        order:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ForumTopic:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        category_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        content:
+          type: string
+        views:
+          type: integer
+        pinned:
+          type: boolean
+        locked:
+          type: boolean
+        last_post_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ForumPost:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        topic_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        content:
+          type: string
+        edited:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ForumSubscription:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        topic_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+
+paths:
+  /tracking/events:
+    post:
+      summary: Track events
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/TrackingEvent'
+      responses:
+        '200':
+          description: Events tracked successfully
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+
+    get:
+      summary: Get tracking events
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: start_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: end_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: event_type
+          in: query
+          schema:
+            type: string
+            enum: [user_event, chat_event, system_event, error_event]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of tracking events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TrackingEvent'
+        '401':
+          description: Unauthorized
+
+  /tracking/metrics:
+    post:
+      summary: Track metrics
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/TrackingMetric'
+      responses:
+        '200':
+          description: Metrics tracked successfully
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+
+    get:
+      summary: Get tracking metrics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: start_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: end_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: name
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of tracking metrics
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TrackingMetric'
+        '401':
+          description: Unauthorized
+
+  /tracking/errors:
+    post:
+      summary: Track errors
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/TrackingError'
+      responses:
+        '200':
+          description: Errors tracked successfully
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+
+    get:
+      summary: Get tracking errors
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: start_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: end_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of tracking errors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TrackingError'
+        '401':
+          description: Unauthorized
+
+  /tracking/stats:
+    get:
+      summary: Get tracking statistics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: start_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: end_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Tracking statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_events:
+                    type: integer
+                  total_metrics:
+                    type: integer
+                  total_errors:
+                    type: integer
+                  event_types:
+                    type: array
+                    items:
+                      type: string
+                  metric_names:
+                    type: array
+                    items:
+                      type: string
+                  error_messages:
+                    type: array
+                    items:
+                      type: string
+        '401':
+          description: Unauthorized
+
+  /location/current:
+    post:
+      summary: Update current location
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Location'
+      responses:
+        '200':
+          description: Location updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Location'
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+
+    get:
+      summary: Get current location
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Current location
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Location'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Location not found
+
+  /location/history:
+    post:
+      summary: Save location history
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocationHistory'
+      responses:
+        '200':
+          description: Location history saved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationHistory'
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+
+    get:
+      summary: Get location history
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: start_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: end_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: List of locations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Location'
+        '401':
+          description: Unauthorized
+
+  /location/stats:
+    get:
+      summary: Get location statistics
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Location statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationStats'
+        '401':
+          description: Unauthorized
+
+  /reports/user-activity:
+    post:
+      summary: Generate user activity report
+      description: Generates a comprehensive report of user activity including events, metrics, and errors
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportOptions'
+      responses:
+        '200':
+          description: Report generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '400':
+          description: Invalid request parameters
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal server error
+
+  /reports/location:
+    post:
+      summary: Generate location report
+      description: Generates a report of user location data including history and statistics
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportOptions'
+      responses:
+        '200':
+          description: Report generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '400':
+          description: Invalid request parameters
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal server error
+
+  /reports/system-health:
+    post:
+      summary: Generate system health report
+      description: Generates a report of system health metrics and errors
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportOptions'
+      responses:
+        '200':
+          description: Report generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '400':
+          description: Invalid request parameters
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal server error
+
+  /scheduler/schedules:
+    post:
+      summary: Create a new report schedule
+      description: Creates a new scheduled report that will be generated and emailed based on the specified frequency
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportSchedule'
+      responses:
+        '201':
+          description: Schedule created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportSchedule'
+        '400':
+          description: Invalid request parameters
+        '401':
+          description: Unauthorized
+        '403':
+          description: Email reports feature not available in your subscription
+        '500':
+          description: Internal server error
+
+    get:
+      summary: List report schedules
+      description: Retrieves all report schedules for the current tenant
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of report schedules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReportSchedule'
+        '401':
+          description: Unauthorized
+
+  /scheduler/schedules/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: ID of the report schedule
+
+    get:
+      summary: Get a report schedule
+      description: Retrieves details of a specific report schedule
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Report schedule details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportSchedule'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Schedule not found
+
+    put:
+      summary: Update a report schedule
+      description: Updates an existing report schedule
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportSchedule'
+      responses:
+        '200':
+          description: Schedule updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportSchedule'
+        '400':
+          description: Invalid request parameters
+        '401':
+          description: Unauthorized
+        '404':
+          description: Schedule not found
+        '500':
+          description: Internal server error
+
+    delete:
+      summary: Delete a report schedule
+      description: Deletes an existing report schedule
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Schedule deleted successfully
+        '401':
+          description: Unauthorized
+        '404':
+          description: Schedule not found
+        '500':
+          description: Internal server error
+
+  /tickets:
+    post:
+      summary: Create a new ticket
+      description: Creates a new support ticket
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Ticket'
+      responses:
+        '201':
+          description: Ticket created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ticket'
+        '400':
+          description: Invalid request parameters
+        '401':
+          description: Unauthorized
+
+    get:
+      summary: List tickets
+      description: Retrieves all tickets for the current tenant with optional filtering
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, pending, resolved, closed]
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [bug, feature, support, security, other]
+        - name: priority
+          in: query
+          schema:
+            type: string
+            enum: [low, medium, high, urgent]
+        - name: assigned_to
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of tickets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Ticket'
+        '401':
+          description: Unauthorized
+
+  /tickets/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: ID of the ticket
+
+    get:
+      summary: Get a ticket
+      description: Retrieves details of a specific ticket
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Ticket details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ticket'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Ticket not found
+
+    put:
+      summary: Update a ticket
+      description: Updates an existing ticket
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Ticket'
+      responses:
+        '200':
+          description: Ticket updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ticket'
+        '400':
+          description: Invalid request parameters
+        '401':
+          description: Unauthorized
+        '404':
+          description: Ticket not found
+
+    /tickets/{id}/status:
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: ID of the ticket
+
+      put:
+        summary: Update ticket status
+        description: Updates the status of a ticket
+        security:
+          - BearerAuth: []
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [open, pending, resolved, closed]
+                    description: New status for the ticket
+        responses:
+          '200':
+            description: Ticket status updated successfully
+          '400':
+            description: Invalid request parameters
+          '401':
+            description: Unauthorized
+          '404':
+            description: Ticket not found
+
+    /tickets/{id}/comments:
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: ID of the ticket
+
+      post:
+        summary: Add a comment
+        description: Adds a comment to a ticket
+        security:
+          - BearerAuth: []
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketComment'
+        responses:
+          '201':
+            description: Comment added successfully
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/TicketComment'
+          '400':
+            description: Invalid request parameters
+          '401':
+            description: Unauthorized
+          '404':
+            description: Ticket not found
+
+      get:
+        summary: Get comments
+        description: Retrieves all comments for a ticket
+        security:
+          - BearerAuth: []
+        responses:
+          '200':
+            description: List of comments
+            content:
+              application/json:
+                schema:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/TicketComment'
+          '401':
+            description: Unauthorized
+          '404':
+            description: Ticket not found
+
+    /tickets/{id}/attachments:
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: ID of the ticket
+
+      post:
+        summary: Upload attachment
+        description: Uploads an attachment to a ticket
+        security:
+          - BearerAuth: []
+        requestBody:
+          required: true
+          content:
+            multipart/form-data:
+              schema:
+                type: object
+                properties:
+                  file:
+                    type: string
+                    format: binary
+                    description: File to upload
+        responses:
+          '201':
+            description: Attachment uploaded successfully
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/TicketAttachment'
+          '400':
+            description: Invalid request parameters
+          '401':
+            description: Unauthorized
+          '404':
+            description: Ticket not found
+
+      get:
+        summary: Get attachments
+        description: Retrieves all attachments for a ticket
+        security:
+          - BearerAuth: []
+        responses:
+          '200':
+            description: List of attachments
+            content:
+              application/json:
+                schema:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/TicketAttachment'
+          '401':
+            description: Unauthorized
+          '404':
+            description: Ticket not found
+
+    /tickets/{id}/attachments/{attachment_id}:
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: ID of the ticket
+        - name: attachment_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: ID of the attachment
+
+      delete:
+        summary: Delete attachment
+        description: Deletes an attachment from a ticket
+        security:
+          - BearerAuth: []
+        responses:
+          '200':
+            description: Attachment deleted successfully
+          '401':
+            description: Unauthorized
+          '404':
+            description: Attachment not found
+
+  /forum/categories:
+    post:
+      summary: Create a new forum category
+      tags:
+        - Forum
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForumCategory'
+      responses:
+        '201':
+          description: Category created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForumCategory'
+        '400':
+          description: Invalid request parameters
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    get:
+      summary: Get all forum categories
+      tags:
+        - Forum
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ForumCategory'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /forum/topics:
+    post:
+      summary: Create a new forum topic
+      tags:
+        - Forum
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForumTopic'
+      responses:
+        '201':
+          description: Topic created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForumTopic'
+        '400':
+          description: Invalid request parameters
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /forum/categories/{id}/topics:
+    get:
+      summary: Get topics in a category
+      tags:
+        - Forum
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: List of topics
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ForumTopic'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Category not found
+
+  /forum/topics/{id}:
+    put:
+      summary: Update a forum topic
+      tags:
+        - Forum
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForumTopic'
+      responses:
+        '200':
+          description: Topic updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForumTopic'
+        '400':
+          description: Invalid request parameters
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Topic not found
+    delete:
+      summary: Delete a forum topic
+      tags:
+        - Forum
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Topic deleted successfully
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Topic not found
+
+  /forum/topics/{id}/posts:
+    post:
+      summary: Create a new post in a topic
+      tags:
+        - Forum
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForumPost'
+      responses:
+        '201':
+          description: Post created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForumPost'
+        '400':
+          description: Invalid request parameters
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Topic not found
+    get:
+      summary: Get posts in a topic
+      tags:
+        - Forum
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: List of posts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ForumPost'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Topic not found
+
+  /forum/posts/{id}:
+    put:
+      summary: Update a forum post
+      tags:
+        - Forum
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForumPost'
+      responses:
+        '200':
+          description: Post updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForumPost'
+        '400':
+          description: Invalid request parameters
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Post not found
+    delete:
+      summary: Delete a forum post
+      tags:
+        - Forum
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Post deleted successfully
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Post not found
+
+  /forum/topics/{id}/subscribe:
+    post:
+      summary: Subscribe to a topic
+      tags:
+        - Forum
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Subscribed successfully
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Topic not found
+    delete:
+      summary: Unsubscribe from a topic
+      tags:
+        - Forum
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Unsubscribed successfully
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Topic not found 

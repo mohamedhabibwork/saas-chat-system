@@ -272,4 +272,99 @@ Subscription plans are configured in `config/subscription_plans.json`:
 - 24/7 availability
 - Priority response
 - Escalation process
-- Backup assistance 
+- Backup assistance
+
+## Feature Comparison
+
+| Feature | Free | Basic | Pro | Enterprise |
+|---------|------|-------|-----|------------|
+| **Chat Features** | | | | |
+| Real-time messaging | ✓ | ✓ | ✓ | ✓ |
+| Group chats | ✓ | ✓ | ✓ | ✓ |
+| File sharing | 10MB | 50MB | 100MB | Unlimited |
+| Message history | 7 days | 30 days | 1 year | Unlimited |
+| **Forum Features** | | | | |
+| Forum categories | 1 | 5 | 20 | Unlimited |
+| Topics per category | 10 | 50 | 200 | Unlimited |
+| Posts per topic | 50 | 200 | 1000 | Unlimited |
+| File attachments | 5MB | 20MB | 50MB | Unlimited |
+| Content moderation | Basic | Basic | Advanced | Custom |
+| **Notification Features** | | | | |
+| Email notifications | ✓ | ✓ | ✓ | ✓ |
+| Push notifications | - | ✓ | ✓ | ✓ |
+| Custom notification templates | - | - | ✓ | ✓ |
+| Webhook integration | - | - | 5 | Unlimited |
+| Notification preferences | Basic | Basic | Advanced | Custom |
+| **Support Features** | | | | |
+| Email support | ✓ | ✓ | ✓ | ✓ |
+| Priority support | - | - | ✓ | ✓ |
+| 24/7 support | - | - | - | ✓ |
+| Dedicated account manager | - | - | - | ✓ |
+| **Security Features** | | | | |
+| End-to-end encryption | ✓ | ✓ | ✓ | ✓ |
+| Two-factor authentication | - | ✓ | ✓ | ✓ |
+| SSO integration | - | - | ✓ | ✓ |
+| Custom security policies | - | - | - | ✓ |
+
+## Pricing
+
+| Plan | Monthly | Annual (20% off) |
+|------|---------|------------------|
+| Free | $0 | $0 |
+| Basic | $29 | $278 |
+| Pro | $99 | $950 |
+| Enterprise | Custom | Custom |
+
+## Feature Details
+
+### Forum Features
+
+1. **Categories**
+   - Organize topics by category
+   - Set category permissions
+   - Custom category ordering
+   - Category-specific moderators
+
+2. **Topics**
+   - Create and manage topics
+   - Pin important topics
+   - Lock topics for announcements
+   - Topic-specific permissions
+
+3. **Posts**
+   - Rich text formatting
+   - File attachments
+   - Code blocks with syntax highlighting
+   - Post editing and deletion
+
+4. **Moderation**
+   - Content filtering
+   - Spam detection
+   - User reporting
+   - Automated moderation rules
+
+### Notification Features
+
+1. **Email Notifications**
+   - HTML email templates
+   - Custom branding
+   - Multiple languages
+   - Digest options
+
+2. **Push Notifications**
+   - Real-time updates
+   - Custom notification sounds
+   - Notification grouping
+   - Deep linking
+
+3. **Webhook Integration**
+   - Custom webhook endpoints
+   - Event filtering
+   - Retry mechanisms
+   - Webhook monitoring
+
+4. **Notification Preferences**
+   - Per-user settings
+   - Per-category settings
+   - Quiet hours
+   - Notification frequency 
