@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/mohamedhabibwork/saas-chat-system/internal/services"
+	"saas-chat-system/internal/services"
 )
 
 // ReportingHandler handles report generation requests
@@ -20,7 +20,16 @@ func NewReportingHandler(reportingService *services.ReportingService) *Reporting
 	}
 }
 
-// GenerateUserActivityReport handles requests to generate user activity reports
+// @Summary      Generate user activity report
+// @Description  Generate a report of user activity within a specified time range
+// @Tags         Reporting
+// @Accept       json
+// @Produce      json
+// @Param        options body services.ReportOptions true "Report options including time range"
+// @Success      200 {object} map[string]interface{} "Generated report"
+// @Failure      400 {object} map[string]interface{} "Bad Request"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Router       /api/v1/reports/user-activity [post]
 func (h *ReportingHandler) GenerateUserActivityReport(c *gin.Context) {
 	var opts services.ReportOptions
 	if err := c.ShouldBindJSON(&opts); err != nil {
@@ -60,7 +69,16 @@ func (h *ReportingHandler) GenerateUserActivityReport(c *gin.Context) {
 	c.JSON(http.StatusOK, report)
 }
 
-// GenerateLocationReport handles requests to generate location reports
+// @Summary      Generate location report
+// @Description  Generate a report of user locations within a specified time range
+// @Tags         Reporting
+// @Accept       json
+// @Produce      json
+// @Param        options body services.ReportOptions true "Report options including time range"
+// @Success      200 {object} map[string]interface{} "Generated report"
+// @Failure      400 {object} map[string]interface{} "Bad Request"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Router       /api/v1/reports/location [post]
 func (h *ReportingHandler) GenerateLocationReport(c *gin.Context) {
 	var opts services.ReportOptions
 	if err := c.ShouldBindJSON(&opts); err != nil {
@@ -100,7 +118,16 @@ func (h *ReportingHandler) GenerateLocationReport(c *gin.Context) {
 	c.JSON(http.StatusOK, report)
 }
 
-// GenerateSystemHealthReport handles requests to generate system health reports
+// @Summary      Generate system health report
+// @Description  Generate a report of system health metrics within a specified time range
+// @Tags         Reporting
+// @Accept       json
+// @Produce      json
+// @Param        options body services.ReportOptions true "Report options including time range"
+// @Success      200 {object} map[string]interface{} "Generated report"
+// @Failure      400 {object} map[string]interface{} "Bad Request"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Router       /api/v1/reports/system-health [post]
 func (h *ReportingHandler) GenerateSystemHealthReport(c *gin.Context) {
 	var opts services.ReportOptions
 	if err := c.ShouldBindJSON(&opts); err != nil {
@@ -131,4 +158,4 @@ func (h *ReportingHandler) GenerateSystemHealthReport(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, report)
-} 
+}

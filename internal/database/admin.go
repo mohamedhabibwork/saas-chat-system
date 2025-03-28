@@ -5,15 +5,15 @@ import (
 	"errors"
 	"time"
 
-	"awesomeProject/internal/models"
 	"golang.org/x/crypto/bcrypt"
+	"saas-chat-system/internal/models"
 )
 
 // CreateDefaultAdmin creates the default admin account if it doesn't exist
 func CreateDefaultAdmin(db *sql.DB) error {
 	// Check if admin exists
 	var count int
-	err := db.QueryRow("SELECT COUNT(*) FROM users WHERE role = 'admin'").Scan(&count)
+	err := db.QueryRow("SELECT COUNT(*) FROM users WHERE role_id = 1").Scan(&count)
 	if err != nil {
 		return err
 	}
@@ -29,26 +29,30 @@ func CreateDefaultAdmin(db *sql.DB) error {
 	}
 
 	admin := &models.User{
-		Username:  "admin",
-		Email:     "admin@example.com",
-		Password:  string(hashedPassword),
-		Role:      "admin",
-		Status:    "active",
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		Username:     "admin",
+		Email:        "admin@example.com",
+		PasswordHash: string(hashedPassword),
+		FirstName:    "Admin",
+		LastName:     "User",
+		RoleID:       1,  // Admin role
+		IsActive:     true,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
 	}
 
 	// Insert admin user
 	_, err = db.Exec(`
 		INSERT INTO users (
-			username, email, password, role, status, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7)
+			username, email, password_hash, first_name, last_name, role_id, is_active, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`,
 		admin.Username,
 		admin.Email,
-		admin.Password,
-		admin.Role,
-		admin.Status,
+		admin.PasswordHash,
+		admin.FirstName,
+		admin.LastName,
+		admin.RoleID,
+		admin.IsActive,
 		admin.CreatedAt,
 		admin.UpdatedAt,
 	)
@@ -60,22 +64,18 @@ func CreateDefaultAdmin(db *sql.DB) error {
 	// Create default tenant
 	tenant := &models.Tenant{
 		Name:      "Default Tenant",
-		Status:    "active",
 		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
 	}
 
 	// Insert default tenant
 	var tenantID int
 	err = db.QueryRow(`
-		INSERT INTO tenants (name, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO tenants (name, created_at)
+		VALUES ($1, $2)
 		RETURNING id
 	`,
 		tenant.Name,
-		tenant.Status,
 		tenant.CreatedAt,
-		tenant.UpdatedAt,
 	).Scan(&tenantID)
 
 	if err != nil {
@@ -84,23 +84,23 @@ func CreateDefaultAdmin(db *sql.DB) error {
 
 	// Create default subscription for admin
 	subscription := &models.Subscription{
-		UserID:    1, // Admin user ID
-		TenantID:  tenantID,
-		Plan:      "enterprise",
-		Status:    "active",
-		StartDate: time.Now(),
-		EndDate:   time.Now().AddDate(1, 0, 0), // 1 year subscription
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		ID:           "1",
+		TenantID:     "1", // Tenant ID as string
+		Plan:         models.PlanEnterprise,
+		Status:       "active",
+		StartDate:    time.Now(),
+		EndDate:      time.Now().AddDate(1, 0, 0), // 1 year subscription
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
 	}
 
 	// Insert default subscription
 	_, err = db.Exec(`
 		INSERT INTO subscriptions (
-			user_id, tenant_id, plan, status, start_date, end_date, created_at, updated_at
+			id, tenant_id, plan, status, start_date, end_date, created_at, updated_at
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`,
-		subscription.UserID,
+		subscription.ID,
 		subscription.TenantID,
 		subscription.Plan,
 		subscription.Status,
@@ -126,8 +126,8 @@ func ResetAdminPassword(db *sql.DB, newPassword string) error {
 
 	result, err := db.Exec(`
 		UPDATE users
-		SET password = $1, updated_at = $2
-		WHERE role = 'admin'
+		SET password_hash = $1, updated_at = $2
+		WHERE role_id = 1
 	`,
 		string(hashedPassword),
 		time.Now(),
@@ -153,16 +153,18 @@ func ResetAdminPassword(db *sql.DB, newPassword string) error {
 func GetAdminUser(db *sql.DB) (*models.User, error) {
 	var user models.User
 	err := db.QueryRow(`
-		SELECT id, username, email, role, status, created_at, updated_at
+		SELECT id, username, email, first_name, last_name, role_id, is_active, created_at, updated_at
 		FROM users
-		WHERE role = 'admin'
+		WHERE role_id = 1
 		LIMIT 1
 	`).Scan(
 		&user.ID,
 		&user.Username,
 		&user.Email,
-		&user.Role,
-		&user.Status,
+		&user.FirstName,
+		&user.LastName,
+		&user.RoleID,
+		&user.IsActive,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
@@ -178,14 +180,16 @@ func GetAdminUser(db *sql.DB) (*models.User, error) {
 func UpdateAdminUser(db *sql.DB, user *models.User) error {
 	_, err := db.Exec(`
 		UPDATE users
-		SET username = $1, email = $2, status = $3, updated_at = $4
-		WHERE role = 'admin'
+		SET username = $1, email = $2, first_name = $3, last_name = $4, is_active = $5, updated_at = $6
+		WHERE role_id = 1
 	`,
 		user.Username,
 		user.Email,
-		user.Status,
+		user.FirstName,
+		user.LastName,
+		user.IsActive,
 		time.Now(),
 	)
 
 	return err
-} 
+}

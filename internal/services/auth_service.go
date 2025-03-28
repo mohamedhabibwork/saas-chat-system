@@ -6,8 +6,8 @@ import (
 	"errors"
 	"time"
 
-	"awesomeProject/internal/models"
 	"golang.org/x/crypto/bcrypt"
+	"saas-chat-system/internal/models"
 )
 
 // AuthService handles authentication-related operations
@@ -287,4 +287,4 @@ func (s *AuthService) logLoginAttempt(userID int, ipAddress string, success bool
 	`
 	_, err := s.db.Exec(query, userID, ipAddress, success)
 	return err
-} 
+}

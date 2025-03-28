@@ -2,18 +2,18 @@ package services
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
-	"github.com/mohamedhabibwork/saas-chat-system/internal/database"
-	"github.com/mohamedhabibwork/saas-chat-system/internal/models"
+	"saas-chat-system/internal/models"
 )
 
 // SchedulerService handles scheduled report generation and delivery
 type SchedulerService struct {
-	db            *database.DB
+	db            *sql.DB
 	reportingSvc  *ReportingService
 	emailSvc      *EmailService
 	schedules     map[string]*models.ReportSchedule
@@ -22,7 +22,7 @@ type SchedulerService struct {
 }
 
 // NewSchedulerService creates a new scheduler service
-func NewSchedulerService(db *database.DB, reportingSvc *ReportingService, emailSvc *EmailService) *SchedulerService {
+func NewSchedulerService(db *sql.DB, reportingSvc *ReportingService, emailSvc *EmailService) *SchedulerService {
 	return &SchedulerService{
 		db:           db,
 		reportingSvc: reportingSvc,
@@ -58,7 +58,28 @@ func (s *SchedulerService) AddSchedule(ctx context.Context, schedule *models.Rep
 	}
 
 	// Save to database
-	if err := s.db.WithContext(ctx).Create(schedule).Error; err != nil {
+	query := `
+		INSERT INTO report_schedules (
+			id, tenant_id, name, type, options, frequency, 
+			time_of_day, day_of_week, day_of_month, recipients,
+			format, last_run, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+	`
+
+	recipientsJSON, err := json.Marshal(schedule.Recipients)
+	if err != nil {
+		return fmt.Errorf("error marshaling recipients: %v", err)
+	}
+
+	optionsJSON := []byte(schedule.Options)
+
+	_, err = s.db.ExecContext(ctx, query,
+		schedule.ID, schedule.TenantID, schedule.Name, schedule.Type,
+		optionsJSON, schedule.Frequency, schedule.TimeOfDay, schedule.DayOfWeek,
+		schedule.DayOfMonth, recipientsJSON, schedule.Format,
+		schedule.LastRun, schedule.CreatedAt, schedule.UpdatedAt)
+
+	if err != nil {
 		return fmt.Errorf("error saving schedule: %v", err)
 	}
 
@@ -78,7 +99,28 @@ func (s *SchedulerService) UpdateSchedule(ctx context.Context, schedule *models.
 	}
 
 	// Update in database
-	if err := s.db.WithContext(ctx).Save(schedule).Error; err != nil {
+	query := `
+		UPDATE report_schedules
+		SET tenant_id = $1, name = $2, type = $3, options = $4,
+			frequency = $5, time_of_day = $6, day_of_week = $7, day_of_month = $8,
+			recipients = $9, format = $10, last_run = $11, updated_at = $12
+		WHERE id = $13
+	`
+
+	recipientsJSON, err := json.Marshal(schedule.Recipients)
+	if err != nil {
+		return fmt.Errorf("error marshaling recipients: %v", err)
+	}
+
+	optionsJSON := []byte(schedule.Options)
+
+	_, err = s.db.ExecContext(ctx, query,
+		schedule.TenantID, schedule.Name, schedule.Type,
+		optionsJSON, schedule.Frequency, schedule.TimeOfDay, schedule.DayOfWeek,
+		schedule.DayOfMonth, recipientsJSON, schedule.Format,
+		schedule.LastRun, time.Now(), schedule.ID)
+
+	if err != nil {
 		return fmt.Errorf("error updating schedule: %v", err)
 	}
 
@@ -93,7 +135,9 @@ func (s *SchedulerService) UpdateSchedule(ctx context.Context, schedule *models.
 // DeleteSchedule deletes a report schedule
 func (s *SchedulerService) DeleteSchedule(ctx context.Context, scheduleID string) error {
 	// Delete from database
-	if err := s.db.WithContext(ctx).Delete(&models.ReportSchedule{}, "id = ?", scheduleID).Error; err != nil {
+	query := `DELETE FROM report_schedules WHERE id = $1`
+	_, err := s.db.ExecContext(ctx, query, scheduleID)
+	if err != nil {
 		return fmt.Errorf("error deleting schedule: %v", err)
 	}
 
@@ -191,7 +235,7 @@ func (s *SchedulerService) runSchedule(ctx context.Context, schedule *models.Rep
 	}
 
 	// Send report via email
-	if err := s.emailSvc.SendReport(schedule.Recipients, report, schedule); err != nil {
+	if err := s.emailSvc.SendReport(schedule.Recipients, schedule, report); err != nil {
 		fmt.Printf("Error sending report: %v\n", err)
 		return
 	}
@@ -200,7 +244,13 @@ func (s *SchedulerService) runSchedule(ctx context.Context, schedule *models.Rep
 	schedule.LastRun = time.Now()
 	schedule.NextRun = schedule.CalculateNextRun()
 
-	if err := s.db.WithContext(ctx).Save(schedule).Error; err != nil {
+	query := `
+		UPDATE report_schedules
+		SET last_run = $1, updated_at = $2
+		WHERE id = $3
+	`
+	_, err = s.db.ExecContext(ctx, query, schedule.LastRun, time.Now(), schedule.ID)
+	if err != nil {
 		fmt.Printf("Error updating schedule: %v\n", err)
 		return
 	}
@@ -212,17 +262,51 @@ func (s *SchedulerService) runSchedule(ctx context.Context, schedule *models.Rep
 
 // loadSchedules loads all active schedules from the database
 func (s *SchedulerService) loadSchedules(ctx context.Context) error {
-	var schedules []models.ReportSchedule
-	if err := s.db.WithContext(ctx).Find(&schedules).Error; err != nil {
+	query := `
+		SELECT id, tenant_id, name, type, options, frequency,
+		       time_of_day, day_of_week, day_of_month, recipients, format,
+			   last_run, created_at, updated_at
+		FROM report_schedules
+	`
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
 		return fmt.Errorf("error loading schedules: %v", err)
 	}
+	defer rows.Close()
 
 	s.scheduleMutex.Lock()
-	for _, schedule := range schedules {
+	defer s.scheduleMutex.Unlock()
+
+	for rows.Next() {
+		var schedule models.ReportSchedule
+		var recipientsJSON, optionsJSON []byte
+		
+		err := rows.Scan(
+			&schedule.ID, &schedule.TenantID, &schedule.Name, 
+			&schedule.Type, &optionsJSON, &schedule.Frequency, &schedule.TimeOfDay,
+			&schedule.DayOfWeek, &schedule.DayOfMonth, &recipientsJSON, &schedule.Format,
+			&schedule.LastRun, &schedule.CreatedAt, &schedule.UpdatedAt,
+		)
+		if err != nil {
+			return fmt.Errorf("error scanning schedule: %v", err)
+		}
+
+		// Parse JSON fields
+		if err := json.Unmarshal(recipientsJSON, &schedule.Recipients); err != nil {
+			return fmt.Errorf("error unmarshaling recipients: %v", err)
+		}
+
+		if len(optionsJSON) > 0 {
+			schedule.Options = string(optionsJSON)
+		}
+
 		schedule.NextRun = schedule.CalculateNextRun()
 		s.schedules[schedule.ID] = &schedule
 	}
-	s.scheduleMutex.Unlock()
+
+	if err = rows.Err(); err != nil {
+		return fmt.Errorf("error iterating schedules: %v", err)
+	}
 
 	return nil
 }
@@ -266,4 +350,4 @@ func (s *SchedulerService) validateSchedule(schedule *models.ReportSchedule) err
 	}
 
 	return nil
-} 
+}

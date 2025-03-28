@@ -1,7 +1,7 @@
 package services
 
 import (
-	"awesomeProject/internal/models"
+	"saas-chat-system/internal/models"
 )
 
 // RoleService handles role-related operations
@@ -244,4 +244,4 @@ func (s *RoleService) DeletePermission(permissionID int) error {
 	query := "DELETE FROM permissions WHERE id = $1"
 	_, err := s.db.Exec(query, permissionID)
 	return err
-} 
+}

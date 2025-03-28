@@ -3,9 +3,8 @@ package services
 import (
 	"database/sql"
 	"fmt"
-	"time"
 
-	"awesomeProject/internal/models"
+	"saas-chat-system/internal/models"
 )
 
 // ChannelService handles channel-related operations
@@ -233,6 +232,30 @@ func (s *ChannelService) GetMessages(channelID int, limit int, offset int) ([]mo
 	return messages, nil
 }
 
+// HasAccess checks if a user has access to a channel
+func (s *ChannelService) HasAccess(channelID, userID int) bool {
+	// TODO: Implement proper access control logic
+	// For now, just check if the user is a member of the channel
+	_, err := s.db.GetChannel(channelID)
+	if err != nil {
+		return false
+	}
+
+	// Check if the user is a member of the channel
+	members, err := s.db.GetChannelMembers(channelID)
+	if err != nil {
+		return false
+	}
+
+	for _, member := range members {
+		if member.UserID == userID {
+			return true
+		}
+	}
+
+	return false
+}
+
 // Helper functions
 
 func (s *ChannelService) addMember(tx *sql.Tx, channelID int, userID int, role string) error {
@@ -246,4 +269,4 @@ func (s *ChannelService) addMember(tx *sql.Tx, channelID int, userID int, role s
 	`
 	_, err := tx.Exec(query, channelID, userID, role)
 	return err
-} 
+}

@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"awesomeProject/internal/models"
+	"saas-chat-system/internal/models"
 )
 
 // TabController handles tab-related operations
@@ -230,4 +230,4 @@ func (c *TabController) DeleteTab(w http.ResponseWriter, r *http.Request) {
 	}
 
 	c.RespondWithJSON(w, http.StatusOK, map[string]string{"status": "success"})
-} 
+}

@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8080:8080"
+      - "${PORT}:8080"
     environment:
       # Application
       - APP_NAME=platform
@@ -117,9 +117,9 @@ services:
       - platform-network
 
   postgres:
-    image: postgres:14-alpine
+    image: postgres:16-alpine
     ports:
-      - "5432:5432"
+      - "${DB_PORT}:5432"
     environment:
       - POSTGRES_USER=platform
       - POSTGRES_PASSWORD=platform_password
@@ -132,7 +132,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT}:6379"
     volumes:
       - redis_data:/data
     networks:
@@ -141,8 +141,8 @@ services:
   nginx:
     image: nginx:alpine
     ports:
-      - "80:80"
-      - "443:443"
+      - "${NGINX_HTTP_PORT}:80"
+      - "${NGINX_HTTPS_PORT}:443"
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d
       - ./nginx/ssl:/etc/nginx/ssl
@@ -154,7 +154,7 @@ services:
   prometheus:
     image: prom/prometheus:latest
     ports:
-      - "9090:9090"
+      - "${PROMETHEUS_PORT}:9090"
     volumes:
       - ./prometheus:/etc/prometheus
       - prometheus_data:/prometheus
@@ -169,7 +169,7 @@ services:
   alertmanager:
     image: prom/alertmanager:latest
     ports:
-      - "9093:9093"
+      - "${ALERTMANAGER_PORT}:9093"
     volumes:
       - ./prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml
       - ./prometheus/template:/etc/alertmanager/template
@@ -182,7 +182,7 @@ services:
   node-exporter:
     image: prom/node-exporter:latest
     ports:
-      - "9100:9100"
+      - "${NODE_EXPORTER_PORT}:9100"
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
@@ -197,7 +197,7 @@ services:
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:latest
     ports:
-      - "8080:8080"
+      - "${CADVISOR_PORT}:8080"
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
@@ -209,7 +209,7 @@ services:
   grafana:
     image: grafana/grafana:latest
     ports:
-      - "3000:3000"
+      - "${GRAFANA_PORT}:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin_password
       - GF_USERS_ALLOW_SIGN_UP=false
@@ -228,7 +228,7 @@ services:
       - discovery.type=single-node
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
     ports:
-      - "9200:9200"
+      - "${ELASTICSEARCH_PORT}:9200"
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
     networks:
@@ -247,7 +247,7 @@ services:
   kibana:
     image: docker.elastic.co/kibana/kibana:7.17.0
     ports:
-      - "5601:5601"
+      - "${KIBANA_PORT}:5601"
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
     depends_on:
@@ -264,4 +264,4 @@ volumes:
 
 networks:
   platform-network:
-    driver: bridge 
+    driver: bridge

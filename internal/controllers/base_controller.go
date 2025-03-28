@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"awesomeProject/internal/models"
-	"awesomeProject/internal/database"
+	"saas-chat-system/internal/database"
+	"saas-chat-system/internal/models"
 )
 
 // BaseController provides common functionality for all controllers
@@ -68,4 +68,4 @@ func (c *BaseController) ValidateUser(userID, tenantID int) bool {
 		return false
 	}
 	return exists
-} 
+}

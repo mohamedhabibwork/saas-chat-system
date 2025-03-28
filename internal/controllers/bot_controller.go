@@ -2,11 +2,13 @@ package controllers
 
 import (
 	"crypto/rand"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
+	"time"
 
-	"awesomeProject/internal/models"
+	"saas-chat-system/internal/models"
 )
 
 // BotController handles bot-related operations
@@ -137,4 +139,4 @@ func generateBotToken() string {
 	b := make([]byte, 32)
 	rand.Read(b)
 	return base64.URLEncoding.EncodeToString(b)
-} 
+}

@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/mohamedhabibwork/saas-chat-system/internal/models"
-	"github.com/mohamedhabibwork/saas-chat-system/internal/services"
+	"saas-chat-system/internal/models"
+	"saas-chat-system/internal/services"
 )
 
 // LocationHandler handles location-related HTTP requests
@@ -21,7 +21,16 @@ func NewLocationHandler(locationService *services.LocationService) *LocationHand
 	}
 }
 
-// UpdateLocation handles location updates
+// @Summary      Update user location
+// @Description  Update the current location of a user
+// @Tags         Location
+// @Accept       json
+// @Produce      json
+// @Param        location body models.Location true "Location data"
+// @Success      200 {object} models.Location "Location updated successfully"
+// @Failure      400 {object} map[string]interface{} "Bad Request"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Router       /api/v1/location/current [post]
 func (h *LocationHandler) UpdateLocation(c *gin.Context) {
 	var location models.Location
 	if err := c.ShouldBindJSON(&location); err != nil {
@@ -41,7 +50,15 @@ func (h *LocationHandler) UpdateLocation(c *gin.Context) {
 	c.JSON(http.StatusOK, location)
 }
 
-// GetCurrentLocation retrieves the current location
+// @Summary      Get user's current location
+// @Description  Retrieve the current location of a user
+// @Tags         Location
+// @Accept       json
+// @Produce      json
+// @Success      200 {object} models.Location "Current location"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Failure      404 {object} map[string]interface{} "Location not found"
+// @Router       /api/v1/location/current [get]
 func (h *LocationHandler) GetCurrentLocation(c *gin.Context) {
 	userID := c.GetString("user_id")
 	tenantID := c.GetString("tenant_id")
@@ -55,7 +72,17 @@ func (h *LocationHandler) GetCurrentLocation(c *gin.Context) {
 	c.JSON(http.StatusOK, location)
 }
 
-// GetLocationHistory retrieves location history
+// @Summary      Get location history
+// @Description  Retrieve location history for a user
+// @Tags         Location
+// @Accept       json
+// @Produce      json
+// @Param        start_time query string false "Start time in RFC3339 format"
+// @Param        end_time query string false "End time in RFC3339 format"
+// @Success      200 {array} models.Location "Location history"
+// @Failure      400 {object} map[string]interface{} "Bad Request"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Router       /api/v1/location/history [get]
 func (h *LocationHandler) GetLocationHistory(c *gin.Context) {
 	userID := c.GetString("user_id")
 	tenantID := c.GetString("tenant_id")
@@ -85,7 +112,16 @@ func (h *LocationHandler) GetLocationHistory(c *gin.Context) {
 	c.JSON(http.StatusOK, locations)
 }
 
-// SaveLocationHistory saves location history
+// @Summary      Save location history
+// @Description  Save a batch of location history data
+// @Tags         Location
+// @Accept       json
+// @Produce      json
+// @Param        history body models.LocationHistory true "Location history data"
+// @Success      200 {object} models.LocationHistory "Location history saved successfully"
+// @Failure      400 {object} map[string]interface{} "Bad Request"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Router       /api/v1/location/history [post]
 func (h *LocationHandler) SaveLocationHistory(c *gin.Context) {
 	var history models.LocationHistory
 	if err := c.ShouldBindJSON(&history); err != nil {
@@ -105,7 +141,14 @@ func (h *LocationHandler) SaveLocationHistory(c *gin.Context) {
 	c.JSON(http.StatusOK, history)
 }
 
-// GetLocationStats retrieves location statistics
+// @Summary      Get location statistics
+// @Description  Retrieve statistics about user locations
+// @Tags         Location
+// @Accept       json
+// @Produce      json
+// @Success      200 {object} models.LocationStats "Location statistics"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Router       /api/v1/location/stats [get]
 func (h *LocationHandler) GetLocationStats(c *gin.Context) {
 	userID := c.GetString("user_id")
 	tenantID := c.GetString("tenant_id")
@@ -117,4 +160,4 @@ func (h *LocationHandler) GetLocationStats(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, stats)
-} 
+}

@@ -3,23 +3,21 @@ package services
 import (
 	"context"
 	"fmt"
-	"time"
 
-	"github.com/google/uuid"
-	"github.com/mohamedhabibwork/saas-chat-system/internal/models"
+	"saas-chat-system/internal/models"
 )
 
 // NotificationService handles sending notifications via email and FCM
 type NotificationService struct {
 	emailService *EmailService
-	fcmClient   *FCMClient
+	fcmClient    *FCMClient
 }
 
 // NewNotificationService creates a new notification service
 func NewNotificationService(emailService *EmailService, fcmClient *FCMClient) *NotificationService {
 	return &NotificationService{
 		emailService: emailService,
-		fcmClient:   fcmClient,
+		fcmClient:    fcmClient,
 	}
 }
 
@@ -55,17 +53,40 @@ func (s *NotificationService) SendForumNotification(ctx context.Context, notific
 
 // FCMClient handles Firebase Cloud Messaging notifications
 type FCMClient struct {
-	// Add FCM client configuration here
+	projectID   string
+	privateKey  string
+	clientEmail string
+}
+
+// NewFCMClient creates a new FCM client
+func NewFCMClient(projectID, privateKey, clientEmail string) *FCMClient {
+	return &FCMClient{
+		projectID:   projectID,
+		privateKey:  privateKey,
+		clientEmail: clientEmail,
+	}
 }
 
 // SendTicketNotification sends a ticket notification via FCM
 func (c *FCMClient) SendTicketNotification(ctx context.Context, notification *models.TicketNotification) error {
-	// Implement FCM notification sending
+	// TODO: Implement FCM notification sending
 	return nil
 }
 
 // SendForumNotification sends a forum notification via FCM
 func (c *FCMClient) SendForumNotification(ctx context.Context, notification *models.ForumNotification) error {
-	// Implement FCM notification sending
+	// TODO: Implement FCM notification sending
 	return nil
-} 
+}
+
+// SendMessage sends a message to a specific device
+func (c *FCMClient) SendMessage(deviceToken string, title, body string) error {
+	// TODO: Implement actual FCM message sending
+	return nil
+}
+
+// SendTopicMessage sends a message to all devices subscribed to a topic
+func (c *FCMClient) SendTopicMessage(topic, title, body string) error {
+	// TODO: Implement actual FCM topic message sending
+	return nil
+}

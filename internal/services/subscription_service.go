@@ -6,16 +6,16 @@ import (
 	"fmt"
 	"time"
 
-	"awesomeProject/internal/models"
+	"saas-chat-system/internal/models"
 )
 
 // SubscriptionService handles subscription-related operations
 type SubscriptionService struct {
-	db Database
+	db *sql.DB
 }
 
 // NewSubscriptionService creates a new subscription service
-func NewSubscriptionService(db Database) *SubscriptionService {
+func NewSubscriptionService(db *sql.DB) *SubscriptionService {
 	return &SubscriptionService{
 		db: db,
 	}
@@ -92,15 +92,15 @@ func (s *SubscriptionService) Subscribe(userID, planID int, paymentMethod string
 
 	// Create subscription
 	subscription := &models.Subscription{
-		UserID:         userID,
-		PlanID:         planID,
-		Status:         "active",
-		StartDate:      now,
-		EndDate:        endDate,
-		AutoRenew:      true,
-		PaymentMethod:  paymentMethod,
-		CreatedAt:      now,
-		UpdatedAt:      now,
+		UserID:        userID,
+		PlanID:        planID,
+		Status:        "active",
+		StartDate:     now,
+		EndDate:       endDate,
+		AutoRenew:     true,
+		PaymentMethod: paymentMethod,
+		CreatedAt:     now,
+		UpdatedAt:     now,
 	}
 
 	query := `
@@ -134,7 +134,14 @@ func (s *SubscriptionService) Subscribe(userID, planID int, paymentMethod string
 }
 
 // CancelSubscription cancels a user's subscription
-func (s *SubscriptionService) CancelSubscription(subscriptionID int) error {
+func (s *SubscriptionService) CancelSubscription(subscriptionID string) error {
+	// Convert string ID to int
+	var id int
+	_, err := fmt.Sscanf(subscriptionID, "%d", &id)
+	if err != nil {
+		return fmt.Errorf("invalid subscription ID format: %v", err)
+	}
+
 	query := `
 		UPDATE subscriptions
 		SET status = 'cancelled',
@@ -142,12 +149,19 @@ func (s *SubscriptionService) CancelSubscription(subscriptionID int) error {
 			updated_at = NOW()
 		WHERE id = $1
 	`
-	_, err := s.db.Exec(query, subscriptionID)
+	_, err = s.db.Exec(query, id)
 	return err
 }
 
 // RenewSubscription renews a user's subscription
-func (s *SubscriptionService) RenewSubscription(subscriptionID int) error {
+func (s *SubscriptionService) RenewSubscription(subscriptionID string) error {
+	// Convert string ID to int
+	var id int
+	_, err := fmt.Sscanf(subscriptionID, "%d", &id)
+	if err != nil {
+		return fmt.Errorf("invalid subscription ID format: %v", err)
+	}
+
 	// Get subscription
 	var subscription models.Subscription
 	query := `
@@ -155,7 +169,7 @@ func (s *SubscriptionService) RenewSubscription(subscriptionID int) error {
 		FROM subscriptions
 		WHERE id = $1
 	`
-	err := s.db.QueryRow(query, subscriptionID).Scan(
+	err = s.db.QueryRow(query, id).Scan(
 		&subscription.ID, &subscription.PlanID,
 		&subscription.EndDate,
 	)
@@ -185,7 +199,7 @@ func (s *SubscriptionService) RenewSubscription(subscriptionID int) error {
 			updated_at = NOW()
 		WHERE id = $2
 	`
-	_, err = s.db.Exec(query, newEndDate, subscriptionID)
+	_, err = s.db.Exec(query, newEndDate, id)
 	if err != nil {
 		return err
 	}
@@ -200,7 +214,7 @@ func (s *SubscriptionService) RenewSubscription(subscriptionID int) error {
 }
 
 // GetUsage retrieves the current usage for a subscription
-func (s *SubscriptionService) GetUsage(subscriptionID int) (*models.Usage, error) {
+func (s *SubscriptionService) GetUsage(subscriptionID string) (*models.Usage, error) {
 	var usage models.Usage
 	query := `
 		SELECT id, subscription_id, messages_sent,
@@ -225,61 +239,64 @@ func (s *SubscriptionService) GetUsage(subscriptionID int) (*models.Usage, error
 }
 
 // UpdateUsage updates the usage statistics for a subscription
-func (s *SubscriptionService) UpdateUsage(subscriptionID int, messagesSent, tokensUsed, storageUsed int) error {
+func (s *SubscriptionService) UpdateUsage(subscriptionID int, messagesSent, tokensUsed int) error {
+	// Convert subscription ID to string for GetUsage
+	subscriptionIDStr := fmt.Sprintf("%d", subscriptionID)
+	_, err := s.GetUsage(subscriptionIDStr)
+	if err != nil {
+		return fmt.Errorf("failed to get usage: %v", err)
+	}
+
 	query := `
 		UPDATE usage
 		SET messages_sent = messages_sent + $1,
 			tokens_used = tokens_used + $2,
-			storage_used = storage_used + $3,
 			updated_at = NOW()
-		WHERE subscription_id = $4
+		WHERE subscription_id = $3
 		AND period_end > NOW()
 	`
-	_, err := s.db.Exec(query, messagesSent, tokensUsed, storageUsed, subscriptionID)
+	_, err = s.db.Exec(query, messagesSent, tokensUsed, subscriptionID)
 	return err
 }
 
 // CheckLimits checks if a user has exceeded their subscription limits
-func (s *SubscriptionService) CheckLimits(subscriptionID int) (bool, error) {
-	// Get subscription and plan
-	var subscription models.Subscription
-	var plan models.Plan
-	query := `
-		SELECT s.id, s.plan_id, p.limits
-		FROM subscriptions s
-		JOIN plans p ON s.plan_id = p.id
-		WHERE s.id = $1
-	`
-	err := s.db.QueryRow(query, subscriptionID).Scan(
-		&subscription.ID, &subscription.PlanID,
-		&plan.Limits,
-	)
+func (s *SubscriptionService) CheckLimits(subscriptionID int) (*models.PlanLimits, error) {
+	// Convert subscription ID to string for GetUsage
+	subscriptionIDStr := fmt.Sprintf("%d", subscriptionID)
+	usage, err := s.GetUsage(subscriptionIDStr)
 	if err != nil {
-		return false, err
+		return nil, fmt.Errorf("failed to get usage: %v", err)
 	}
 
-	// Get current usage
-	usage, err := s.GetUsage(subscriptionID)
+	// Get plan
+	plan, err := s.GetPlan(subscriptionID)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
 	// Check limits
 	if usage.MessagesSent >= plan.Limits.MessagesPerDay {
-		return false, errors.New("daily message limit exceeded")
+		return nil, errors.New("daily message limit exceeded")
 	}
 	if usage.TokensUsed >= plan.Limits.TokensPerMonth {
-		return false, errors.New("monthly token limit exceeded")
+		return nil, errors.New("monthly token limit exceeded")
 	}
 	if usage.StorageUsed >= plan.Limits.StorageGB {
-		return false, errors.New("storage limit exceeded")
+		return nil, errors.New("storage limit exceeded")
 	}
 
-	return true, nil
+	return &plan.Limits, nil
 }
 
 // UpdateFileUsage updates the file-related usage statistics for a subscription
-func (s *SubscriptionService) UpdateFileUsage(subscriptionID int, fileSize int64) error {
+func (s *SubscriptionService) UpdateFileUsage(subscriptionID string, fileSize int64) error {
+	// Convert string ID to int
+	var id int
+	_, err := fmt.Sscanf(subscriptionID, "%d", &id)
+	if err != nil {
+		return fmt.Errorf("invalid subscription ID format: %v", err)
+	}
+
 	// Start transaction
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -305,7 +322,7 @@ func (s *SubscriptionService) UpdateFileUsage(subscriptionID int, fileSize int64
 			updated_at = NOW()
 		WHERE subscription_id = $3
 	`
-	_, err = tx.Exec(query, usage.StorageUsed, usage.FilesUploaded, subscriptionID)
+	_, err = tx.Exec(query, usage.StorageUsed, usage.FilesUploaded, id)
 	if err != nil {
 		return fmt.Errorf("failed to update usage: %v", err)
 	}
@@ -319,48 +336,30 @@ func (s *SubscriptionService) UpdateFileUsage(subscriptionID int, fileSize int64
 }
 
 // UpdateStorageUsage updates the storage usage after file deletion
-func (s *SubscriptionService) UpdateStorageUsage(subscriptionID int, fileSize int64) error {
-	// Start transaction
-	tx, err := s.db.Begin()
+func (s *SubscriptionService) UpdateStorageUsage(subscriptionID int, storageUsed int64) error {
+	// Convert subscription ID to string for GetUsage
+	subscriptionIDStr := fmt.Sprintf("%d", subscriptionID)
+	_, err := s.GetUsage(subscriptionIDStr)
 	if err != nil {
-		return fmt.Errorf("failed to start transaction: %v", err)
-	}
-	defer tx.Rollback()
-
-	// Get current usage
-	usage, err := s.GetUsage(subscriptionID)
-	if err != nil {
-		return err
+		return fmt.Errorf("failed to get usage: %v", err)
 	}
 
-	// Update storage used
-	usage.StorageUsed -= fileSize
-	if usage.StorageUsed < 0 {
-		usage.StorageUsed = 0
-	}
-
-	// Update usage record
 	query := `
 		UPDATE usage
-		SET storage_used = $1,
+		SET storage_used = storage_used + $1,
 			updated_at = NOW()
 		WHERE subscription_id = $2
+		AND period_end > NOW()
 	`
-	_, err = tx.Exec(query, usage.StorageUsed, subscriptionID)
-	if err != nil {
-		return fmt.Errorf("failed to update usage: %v", err)
-	}
-
-	// Commit transaction
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %v", err)
-	}
-
-	return nil
+	_, err = s.db.Exec(query, storageUsed, subscriptionID)
+	return err
 }
 
 // GetActiveSubscription gets the active subscription for a user
 func (s *SubscriptionService) GetActiveSubscription(userID int) (*models.Subscription, error) {
+	var subscription models.Subscription
+	var plan models.Plan
+
 	query := `
 		SELECT s.id, s.user_id, s.plan_id, s.status, s.start_date, s.end_date,
 			   s.auto_renew, s.payment_method, s.created_at, s.updated_at,
@@ -372,16 +371,13 @@ func (s *SubscriptionService) GetActiveSubscription(userID int) (*models.Subscri
 		ORDER BY s.created_at DESC
 		LIMIT 1
 	`
-	var subscription models.Subscription
 	err := s.db.QueryRow(query, userID).Scan(
 		&subscription.ID, &subscription.UserID, &subscription.PlanID,
 		&subscription.Status, &subscription.StartDate, &subscription.EndDate,
 		&subscription.AutoRenew, &subscription.PaymentMethod,
 		&subscription.CreatedAt, &subscription.UpdatedAt,
-		&subscription.Plan.ID, &subscription.Plan.Name,
-		&subscription.Plan.Description, &subscription.Plan.Price,
-		&subscription.Plan.Interval, &subscription.Plan.Features,
-		&subscription.Plan.Limits,
+		&plan.ID, &plan.Name, &plan.Description, &plan.Price,
+		&plan.Interval, &plan.Features, &plan.Limits,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -389,20 +385,108 @@ func (s *SubscriptionService) GetActiveSubscription(userID int) (*models.Subscri
 		}
 		return nil, err
 	}
+
+	subscription.Plan2 = &plan
 	return &subscription, nil
+}
+
+// GetSubscription retrieves a subscription by ID
+func (s *SubscriptionService) GetSubscription(subscriptionID string) (*models.Subscription, error) {
+	var subscription models.Subscription
+	var plan models.Plan
+
+	query := `
+		SELECT s.id, s.user_id, s.plan_id, s.status, s.start_date,
+			   s.end_date, s.auto_renew, s.payment_method, s.billing_email,
+			   s.created_at, s.updated_at, p.id, p.name, p.description,
+			   p.price, p.interval, p.features, p.limits, p.created_at,
+			   p.updated_at
+		FROM subscriptions s
+		JOIN plans p ON s.plan_id = p.id
+		WHERE s.id = $1
+	`
+	err := s.db.QueryRow(query, subscriptionID).Scan(
+		&subscription.ID, &subscription.UserID, &subscription.PlanID,
+		&subscription.Status, &subscription.StartDate, &subscription.EndDate,
+		&subscription.AutoRenew, &subscription.PaymentMethod, &subscription.BillingEmail,
+		&subscription.CreatedAt, &subscription.UpdatedAt,
+		&plan.ID, &plan.Name, &plan.Description, &plan.Price,
+		&plan.Interval, &plan.Features, &plan.Limits, &plan.CreatedAt,
+		&plan.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	subscription.Plan2 = &plan
+	return &subscription, nil
+}
+
+// CreateUsageRecord creates a new usage record for a subscription
+func (s *SubscriptionService) CreateUsageRecord(subscriptionID string, usage *models.Usage) error {
+	// Convert string ID to int
+	var id int
+	_, err := fmt.Sscanf(subscriptionID, "%d", &id)
+	if err != nil {
+		return fmt.Errorf("invalid subscription ID format: %v", err)
+	}
+
+	query := `
+		INSERT INTO usage (subscription_id, messages_sent, tokens_used,
+						  storage_used, files_uploaded, period_start,
+						  period_end, created_at, last_updated)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+		RETURNING id
+	`
+	return s.db.QueryRow(
+		query,
+		id,
+		usage.MessagesSent,
+		usage.TokensUsed,
+		usage.StorageUsed,
+		usage.FilesUploaded,
+		usage.PeriodStart,
+		usage.PeriodEnd,
+	).Scan(&usage.ID)
+}
+
+// UpdateSubscription updates a subscription's details
+func (s *SubscriptionService) UpdateSubscription(subscription *models.Subscription) error {
+	query := `
+		UPDATE subscriptions
+		SET status = $1, start_date = $2, end_date = $3,
+			auto_renew = $4, payment_method = $5, billing_email = $6,
+			updated_at = NOW()
+		WHERE id = $7
+	`
+	_, err := s.db.Exec(
+		query,
+		subscription.Status,
+		subscription.StartDate,
+		subscription.EndDate,
+		subscription.AutoRenew,
+		subscription.PaymentMethod,
+		subscription.BillingEmail,
+		subscription.ID,
+	)
+	return err
 }
 
 // Helper functions
 
-func (s *SubscriptionService) createUsageRecord(subscriptionID int) error {
+func (s *SubscriptionService) createUsageRecord(subscriptionID string) error {
+	// Convert string ID to int
+	var id int
+	_, err := fmt.Sscanf(subscriptionID, "%d", &id)
+	if err != nil {
+		return fmt.Errorf("invalid subscription ID format: %v", err)
+	}
+
 	now := time.Now()
 	query := `
-		INSERT INTO usage (
-			subscription_id, messages_sent, tokens_used,
-			storage_used, period_start, period_end, created_at
-		)
+		INSERT INTO usage (subscription_id, messages_sent, tokens_used, storage_used, period_start, period_end, created_at)
 		VALUES ($1, 0, 0, 0, $2, $3, NOW())
 	`
-	_, err := s.db.Exec(query, subscriptionID, now, now.AddDate(0, 1, 0))
+	_, err = s.db.Exec(query, id, now, now.AddDate(0, 1, 0))
 	return err
-} 
+}

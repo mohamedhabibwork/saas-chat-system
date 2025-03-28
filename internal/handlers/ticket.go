@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 
 	"github.com/gin-gonic/gin"
-	"github.com/mohamedhabibwork/saas-chat-system/internal/models"
-	"github.com/mohamedhabibwork/saas-chat-system/internal/services"
+	"saas-chat-system/internal/models"
+	"saas-chat-system/internal/services"
 )
 
 // TicketHandler handles ticket-related HTTP requests
@@ -21,7 +21,16 @@ func NewTicketHandler(ticketService *services.TicketService) *TicketHandler {
 	}
 }
 
-// CreateTicket handles requests to create a new ticket
+// @Summary      Create a support ticket
+// @Description  Create a new support ticket
+// @Tags         Tickets
+// @Accept       json
+// @Produce      json
+// @Param        ticket body models.Ticket true "Ticket details"
+// @Success      201 {object} models.Ticket "Ticket created successfully"
+// @Failure      400 {object} map[string]interface{} "Bad Request"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Router       /api/v1/tickets [post]
 func (h *TicketHandler) CreateTicket(c *gin.Context) {
 	var ticket models.Ticket
 	if err := c.ShouldBindJSON(&ticket); err != nil {
@@ -52,7 +61,16 @@ func (h *TicketHandler) CreateTicket(c *gin.Context) {
 	c.JSON(http.StatusCreated, ticket)
 }
 
-// GetTicket handles requests to retrieve a ticket
+// @Summary      Get ticket details
+// @Description  Get details of a specific ticket
+// @Tags         Tickets
+// @Accept       json
+// @Produce      json
+// @Param        id path string true "Ticket ID"
+// @Success      200 {object} models.Ticket "Ticket details"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Failure      404 {object} map[string]interface{} "Ticket not found"
+// @Router       /api/v1/tickets/{id} [get]
 func (h *TicketHandler) GetTicket(c *gin.Context) {
 	ticketID := c.Param("id")
 	ticket, err := h.ticketService.GetTicket(c.Request.Context(), ticketID)
@@ -71,7 +89,18 @@ func (h *TicketHandler) GetTicket(c *gin.Context) {
 	c.JSON(http.StatusOK, ticket)
 }
 
-// UpdateTicket handles requests to update a ticket
+// @Summary      Update ticket details
+// @Description  Update an existing ticket
+// @Tags         Tickets
+// @Accept       json
+// @Produce      json
+// @Param        id path string true "Ticket ID"
+// @Param        ticket body models.Ticket true "Updated ticket details"
+// @Success      200 {object} models.Ticket "Ticket updated successfully"
+// @Failure      400 {object} map[string]interface{} "Bad Request"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Failure      404 {object} map[string]interface{} "Ticket not found"
+// @Router       /api/v1/tickets/{id} [put]
 func (h *TicketHandler) UpdateTicket(c *gin.Context) {
 	ticketID := c.Param("id")
 	ticket, err := h.ticketService.GetTicket(c.Request.Context(), ticketID)
@@ -105,7 +134,18 @@ func (h *TicketHandler) UpdateTicket(c *gin.Context) {
 	c.JSON(http.StatusOK, updatedTicket)
 }
 
-// UpdateTicketStatus handles requests to update a ticket's status
+// @Summary      Update ticket status
+// @Description  Update the status of a ticket
+// @Tags         Tickets
+// @Accept       json
+// @Produce      json
+// @Param        id path string true "Ticket ID"
+// @Param        status body models.TicketStatus true "New ticket status"
+// @Success      200 {object} map[string]interface{} "Ticket status updated successfully"
+// @Failure      400 {object} map[string]interface{} "Bad Request"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Failure      404 {object} map[string]interface{} "Ticket not found"
+// @Router       /api/v1/tickets/{id}/status [put]
 func (h *TicketHandler) UpdateTicketStatus(c *gin.Context) {
 	ticketID := c.Param("id")
 	ticket, err := h.ticketService.GetTicket(c.Request.Context(), ticketID)
@@ -137,7 +177,18 @@ func (h *TicketHandler) UpdateTicketStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "ticket status updated successfully"})
 }
 
-// ListTickets handles requests to list tickets
+// @Summary      List support tickets
+// @Description  Get all support tickets with optional filtering
+// @Tags         Tickets
+// @Accept       json
+// @Produce      json
+// @Param        status query string false "Filter by status"
+// @Param        category query string false "Filter by category"
+// @Param        priority query string false "Filter by priority"
+// @Param        assigned_to query string false "Filter by assigned user"
+// @Success      200 {array} models.Ticket "List of tickets"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Router       /api/v1/tickets [get]
 func (h *TicketHandler) ListTickets(c *gin.Context) {
 	tenantID, exists := c.Get("tenant_id")
 	if !exists {
@@ -169,7 +220,18 @@ func (h *TicketHandler) ListTickets(c *gin.Context) {
 	c.JSON(http.StatusOK, tickets)
 }
 
-// AddComment handles requests to add a comment to a ticket
+// @Summary      Add comment to ticket
+// @Description  Add a new comment to a ticket
+// @Tags         Tickets
+// @Accept       json
+// @Produce      json
+// @Param        id path string true "Ticket ID"
+// @Param        comment body models.TicketComment true "Comment details"
+// @Success      201 {object} models.TicketComment "Comment added successfully"
+// @Failure      400 {object} map[string]interface{} "Bad Request"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Failure      404 {object} map[string]interface{} "Ticket not found"
+// @Router       /api/v1/tickets/{id}/comments [post]
 func (h *TicketHandler) AddComment(c *gin.Context) {
 	ticketID := c.Param("id")
 	ticket, err := h.ticketService.GetTicket(c.Request.Context(), ticketID)
@@ -202,7 +264,16 @@ func (h *TicketHandler) AddComment(c *gin.Context) {
 	c.JSON(http.StatusCreated, comment)
 }
 
-// GetComments handles requests to retrieve comments for a ticket
+// @Summary      Get ticket comments
+// @Description  Get all comments for a ticket
+// @Tags         Tickets
+// @Accept       json
+// @Produce      json
+// @Param        id path string true "Ticket ID"
+// @Success      200 {array} models.TicketComment "List of comments"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Failure      404 {object} map[string]interface{} "Ticket not found"
+// @Router       /api/v1/tickets/{id}/comments [get]
 func (h *TicketHandler) GetComments(c *gin.Context) {
 	ticketID := c.Param("id")
 	ticket, err := h.ticketService.GetTicket(c.Request.Context(), ticketID)
@@ -227,7 +298,18 @@ func (h *TicketHandler) GetComments(c *gin.Context) {
 	c.JSON(http.StatusOK, comments)
 }
 
-// UploadAttachment handles requests to upload an attachment
+// @Summary      Upload attachment to ticket
+// @Description  Upload a file attachment to a ticket
+// @Tags         Tickets
+// @Accept       multipart/form-data
+// @Produce      json
+// @Param        id path string true "Ticket ID"
+// @Param        file formData file true "File to upload"
+// @Success      201 {object} models.TicketAttachment "Attachment uploaded successfully"
+// @Failure      400 {object} map[string]interface{} "Bad Request"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Failure      404 {object} map[string]interface{} "Ticket not found"
+// @Router       /api/v1/tickets/{id}/attachments [post]
 func (h *TicketHandler) UploadAttachment(c *gin.Context) {
 	ticketID := c.Param("id")
 	ticket, err := h.ticketService.GetTicket(c.Request.Context(), ticketID)
@@ -267,7 +349,16 @@ func (h *TicketHandler) UploadAttachment(c *gin.Context) {
 	c.JSON(http.StatusCreated, attachment)
 }
 
-// GetAttachments handles requests to retrieve attachments for a ticket
+// @Summary      Get ticket attachments
+// @Description  Get all attachments for a ticket
+// @Tags         Tickets
+// @Accept       json
+// @Produce      json
+// @Param        id path string true "Ticket ID"
+// @Success      200 {array} models.TicketAttachment "List of attachments"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Failure      404 {object} map[string]interface{} "Ticket not found"
+// @Router       /api/v1/tickets/{id}/attachments [get]
 func (h *TicketHandler) GetAttachments(c *gin.Context) {
 	ticketID := c.Param("id")
 	ticket, err := h.ticketService.GetTicket(c.Request.Context(), ticketID)
@@ -292,7 +383,17 @@ func (h *TicketHandler) GetAttachments(c *gin.Context) {
 	c.JSON(http.StatusOK, attachments)
 }
 
-// DeleteAttachment handles requests to delete an attachment
+// @Summary      Delete ticket attachment
+// @Description  Delete a specific attachment from a ticket
+// @Tags         Tickets
+// @Accept       json
+// @Produce      json
+// @Param        id path string true "Ticket ID"
+// @Param        attachment_id path string true "Attachment ID"
+// @Success      204 "Attachment deleted successfully"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Failure      404 {object} map[string]interface{} "Attachment not found"
+// @Router       /api/v1/tickets/{id}/attachments/{attachment_id} [delete]
 func (h *TicketHandler) DeleteAttachment(c *gin.Context) {
 	attachmentID := c.Param("attachment_id")
 	// TODO: Implement attachment ownership verification
@@ -302,4 +403,4 @@ func (h *TicketHandler) DeleteAttachment(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "attachment deleted successfully"})
-} 
+}

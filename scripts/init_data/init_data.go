@@ -1,16 +1,14 @@
-package main
+package initdata
 
 import (
 	"database/sql"
 	"fmt"
 	"log"
-	"time"
 
 	_ "github.com/lib/pq"
-	"awesomeProject/internal/models"
 )
 
-func main() {
+func InitData() {
 	// Connect to database
 	db, err := sql.Open("postgres", "postgres://user:password@localhost:5432/dbname?sslmode=disable")
 	if err != nil {
@@ -19,14 +17,14 @@ func main() {
 	defer db.Close()
 
 	// Initialize data
-	if err := initData(db); err != nil {
+	if err := initDatabase(db); err != nil {
 		log.Fatal(err)
 	}
 
 	log.Println("Data initialization completed successfully")
 }
 
-func initData(db *sql.DB) error {
+func initDatabase(db *sql.DB) error {
 	// Create default roles
 	roles := []struct {
 		name        string
@@ -228,4 +226,4 @@ func initData(db *sql.DB) error {
 	}
 
 	return nil
-} 
+}

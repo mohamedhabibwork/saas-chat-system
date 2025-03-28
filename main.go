@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/signal"
 	"strconv"
 	"time"
 
@@ -16,11 +15,68 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
+	_ "saas-chat-system/docs" // This is where the generated swagger docs will be
 
-	"github.com/your-project/handlers"
-	"github.com/your-project/middleware"
-	"github.com/your-project/services"
+	"saas-chat-system/internal/handlers"
+	"saas-chat-system/internal/middleware"
+	"saas-chat-system/internal/services"
+	"saas-chat-system/internal/models"
 )
+
+// @title           Chat System API
+// @version         1.0
+// @description     A chat system API with real-time messaging, file sharing, and support ticket management.
+// @termsOfService  http://swagger.io/terms/
+
+// @contact.name   API Support
+// @contact.url    http://www.swagger.io/support
+// @contact.email  support@swagger.io
+
+// @license.name  Apache 2.0
+// @license.url   http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host      localhost:8080
+// @BasePath  /api/v1
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and JWT token.
+
+// @tag.name Authentication
+// @tag.description Authentication endpoints for user login, registration, and token management
+
+// @tag.name Users
+// @tag.description User management endpoints for creating, updating, and managing users
+
+// @tag.name Chat
+// @tag.description Real-time chat functionality including private messages, group chats, and notifications
+
+// @tag.name Files
+// @tag.description File upload, download, and management endpoints
+
+// @tag.name Bots
+// @tag.description Bot management and interaction endpoints
+
+// @tag.name Tickets
+// @tag.description Support ticket management endpoints
+
+// @tag.name Forum
+// @tag.description Forum and discussion board endpoints
+
+// @tag.name Tracking
+// @tag.description User activity and system metrics tracking endpoints
+
+// @tag.name Location
+// @tag.description User location tracking and history endpoints
+
+// @tag.name Reporting
+// @tag.description Report generation and management endpoints
+
+// @tag.name Scheduler
+// @tag.description Scheduled task and report generation endpoints
 
 // Error codes
 const (
@@ -390,6 +446,30 @@ func createTables(db *sql.DB) error {
 		return err
 	}
 
+	// Create report_schedules table
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS report_schedules (
+			id VARCHAR(36) PRIMARY KEY,
+			tenant_id VARCHAR(36) NOT NULL,
+			name VARCHAR(100) NOT NULL,
+			type VARCHAR(50) NOT NULL,
+			frequency VARCHAR(20) NOT NULL,
+			day_of_week INTEGER,
+			day_of_month INTEGER,
+			time_of_day VARCHAR(5) NOT NULL,
+			recipients TEXT[],
+			format VARCHAR(10) NOT NULL,
+			options JSONB,
+			last_run TIMESTAMP,
+			next_run TIMESTAMP,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -410,6 +490,16 @@ func getEnvAsInt(key string, fallback int) int {
 	return fallback
 }
 
+// @Summary      WebSocket connection endpoint
+// @Description  Establishes a WebSocket connection for real-time chat functionality
+// @Tags         Chat
+// @Accept       json
+// @Produce      json
+// @Param        username query string true "Username for authentication"
+// @Success      101 {string} string "Switching Protocols"
+// @Failure      400 {object} APIError "Bad Request"
+// @Failure      401 {object} APIError "Unauthorized"
+// @Router       /ws [get]
 func handleWebSocket(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -529,10 +619,10 @@ func readPump(hub *Hub, client *Client) {
 		if err != nil {
 			timezone = "UTC" // Default to UTC if not found
 		}
-		
+
 		// Set sender timezone
 		msg.SenderTimezone = timezone
-		
+
 		// Initialize metadata if needed
 		if msg.Metadata == nil {
 			msg.Metadata = make(map[string]interface{})
@@ -584,10 +674,12 @@ func writePump(hub *Hub, client *Client) {
 			}
 
 			// Format timestamp according to recipient's timezone
-			if message.Timestamp != nil {
+			var msg Message
+			if err := json.Unmarshal(message, &msg); err == nil && !msg.Timestamp.IsZero() {
 				loc, err := time.LoadLocation(recipientTimezone)
 				if err == nil {
-					message.Timestamp = message.Timestamp.In(loc)
+					msg.Timestamp = msg.Timestamp.In(loc)
+					message, _ = json.Marshal(msg)
 				}
 			}
 
@@ -595,12 +687,18 @@ func writePump(hub *Hub, client *Client) {
 			if err != nil {
 				return
 			}
-			_ = json.NewEncoder(w).Encode(message)
+			if _, err := w.Write(message); err != nil {
+				return
+			}
 
 			n := len(client.Send)
 			for i := 0; i < n; i++ {
-				_ = w.Write([]byte{'\n'})
-				_ = json.NewEncoder(w).Encode(<-client.Send)
+				if _, err := w.Write([]byte{'\n'}); err != nil {
+					return
+				}
+				if _, err := w.Write(<-client.Send); err != nil {
+					return
+				}
 			}
 
 			if err := w.Close(); err != nil {
@@ -690,6 +788,12 @@ func saveTopicMessage(client *Client, msg Message) (int, error) {
 }
 
 func main() {
+	// Initialize router
+	r := gin.Default()
+
+	// Serve Swagger documentation
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+
 	// Connect to database
 	var err error
 	db, err = setupDB()
@@ -701,33 +805,47 @@ func main() {
 	}(db)
 	log.Println("Connected to PostgresSQL database")
 
+	// Create database tables
+	if err := createTables(db); err != nil {
+		log.Fatal("Failed to create tables:", err)
+	}
+	log.Println("Database tables created successfully")
+
 	// Create a new hub
 	hub := newHub()
 	go hub.run()
+
+	// WebSocket route
+	r.GET("/ws", func(c *gin.Context) {
+		handleWebSocket(hub, c.Writer, c.Request)
+	})
+
+	// API routes group
+	api := r.Group("/api/v1")
+	api.Use(middleware.AuthRequired())
 
 	// Initialize tracking service
 	trackingService := services.NewTrackingService(db)
 	trackingHandler := handlers.NewTrackingHandler(trackingService)
 
 	// Register tracking routes
-	tracking := r.Group("/api/v1/tracking")
-	tracking.Use(middleware.AuthRequired())
+	tracking := api.Group("/tracking")
 	{
 		// Event tracking endpoints
 		tracking.POST("/events", trackingHandler.TrackEvents)
 		tracking.GET("/events", trackingHandler.GetEvents)
-		
+
 		// Metric tracking endpoints
 		tracking.POST("/metrics", trackingHandler.TrackMetrics)
 		tracking.GET("/metrics", trackingHandler.GetMetrics)
-		
+
 		// Error tracking endpoints
 		tracking.POST("/errors", trackingHandler.TrackErrors)
 		tracking.GET("/errors", trackingHandler.GetErrors)
-		
+
 		// Statistics endpoint
 		tracking.GET("/stats", trackingHandler.GetTrackingStats)
-		
+
 		// Maintenance endpoint
 		tracking.POST("/cleanup", trackingHandler.CleanupOldData)
 	}
@@ -737,17 +855,16 @@ func main() {
 	locationHandler := handlers.NewLocationHandler(locationService)
 
 	// Register location routes
-	location := r.Group("/api/v1/location")
-	location.Use(middleware.AuthRequired())
+	location := api.Group("/location")
 	{
 		// Current location endpoints
 		location.POST("/current", locationHandler.UpdateLocation)
 		location.GET("/current", locationHandler.GetCurrentLocation)
-		
+
 		// History endpoints
 		location.GET("/history", locationHandler.GetLocationHistory)
 		location.POST("/history", locationHandler.SaveLocationHistory)
-		
+
 		// Statistics endpoint
 		location.GET("/stats", locationHandler.GetLocationStats)
 	}
@@ -783,7 +900,8 @@ func main() {
 
 	// Initialize scheduler service
 	schedulerService := services.NewSchedulerService(db, reportingService, emailService)
-	schedulerHandler := handlers.NewSchedulerHandler(schedulerService)
+	database := models.NewDatabase(db)
+	schedulerHandler := handlers.NewSchedulerHandler(schedulerService, database)
 
 	// Start scheduler service
 	if err := schedulerService.Start(context.Background()); err != nil {
@@ -792,8 +910,7 @@ func main() {
 	defer schedulerService.Stop()
 
 	// Register scheduler routes
-	scheduler := r.Group("/api/v1/scheduler")
-	scheduler.Use(middleware.AuthRequired())
+	scheduler := api.Group("/scheduler")
 	{
 		// Report schedule management endpoints
 		scheduler.POST("/schedules", schedulerHandler.CreateSchedule)
@@ -808,8 +925,7 @@ func main() {
 	ticketHandler := handlers.NewTicketHandler(ticketService)
 
 	// Register ticket routes
-	tickets := r.Group("/api/v1/tickets")
-	tickets.Use(middleware.AuthRequired())
+	tickets := api.Group("/tickets")
 	{
 		// Ticket management endpoints
 		tickets.POST("", ticketHandler.CreateTicket)
@@ -832,19 +948,17 @@ func main() {
 	go func() {
 		ticker := time.NewTicker(24 * time.Hour)
 		for range ticker.C {
-			err := trackingHandler.CleanupOldData(context.Background())
-			if err != nil {
-				log.Println("Error cleaning up old tracking data:", err)
-			}
+			c := &gin.Context{}
+			trackingHandler.CleanupOldData(c)
 		}
 	}()
 
 	// Initialize forum service
-	forumService := services.NewForumService(db)
+	forumService := services.NewForumService(db, notificationService)
 	forumHandler := handlers.NewForumHandler(forumService)
 
 	// Register forum routes
-	forum := r.Group("/api/v1/forum")
+	forum := api.Group("/forum")
 	{
 		// Categories
 		forum.POST("/categories", forumHandler.CreateCategory)
@@ -869,22 +983,8 @@ func main() {
 
 	// Start the server
 	port := getEnv("PORT", "8080")
-	server := &http.Server{
-		Addr: ":" + port,
+	log.Printf("Server starting on port %s", port)
+	if err := r.Run(":" + port); err != nil {
+		log.Fatal("Failed to start server:", err)
 	}
-
-	// Graceful shutdown
-	go func() {
-		log.Printf("Server starting on port %s\n", port)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server error: %v", err)
-		}
-	}()
-
-	// Wait for interrupt signal
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt)
-	<-stop
-
-	log.Println("Server shutting down...")
 }

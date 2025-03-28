@@ -2,13 +2,14 @@ package websocket
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/yourusername/platform/internal/encryption"
+	"saas-chat-system/internal/encryption"
 )
 
 const (
@@ -58,12 +59,12 @@ type Message struct {
 
 // Hub maintains WebSocket clients and broadcasts messages
 type Hub struct {
-	clients          map[*Client]bool
-	channels         map[string]map[*Client]bool
-	userChannels     map[string]map[string]bool
-	register         chan *Client
-	unregister       chan *Client
-	broadcast        chan *Message
+	clients           map[*Client]bool
+	channels          map[string]map[*Client]bool
+	userChannels      map[string]map[string]bool
+	register          chan *Client
+	unregister        chan *Client
+	broadcast         chan *Message
 	encryptionService *encryption.Service
 	sync.RWMutex
 }
@@ -71,12 +72,12 @@ type Hub struct {
 // NewHub creates a new hub
 func NewHub(encryptionService *encryption.Service) *Hub {
 	return &Hub{
-		clients:          make(map[*Client]bool),
-		channels:         make(map[string]map[*Client]bool),
-		userChannels:     make(map[string]map[string]bool),
-		register:         make(chan *Client),
-		unregister:       make(chan *Client),
-		broadcast:        make(chan *Message),
+		clients:           make(map[*Client]bool),
+		channels:          make(map[string]map[*Client]bool),
+		userChannels:      make(map[string]map[string]bool),
+		register:          make(chan *Client),
+		unregister:        make(chan *Client),
+		broadcast:         make(chan *Message),
 		encryptionService: encryptionService,
 	}
 }
@@ -114,7 +115,7 @@ func (h *Hub) Run() {
 				for channel, clients := range h.channels {
 					if _, ok := clients[client]; ok {
 						delete(clients, client)
-						
+
 						// Send user left notification to channel
 						h.sendUserStatusUpdate(client.userID, channel, false)
 					}
@@ -123,7 +124,7 @@ func (h *Hub) Run() {
 				// Remove user from user channels
 				if channels, ok := h.userChannels[client.userID]; ok {
 					delete(h.userChannels, client.userID)
-					
+
 					// Remove user from all channels
 					for channel := range channels {
 						if clientsInChannel, ok := h.channels[channel]; ok {
@@ -145,7 +146,7 @@ func (h *Hub) Run() {
 				h.RUnlock()
 				continue
 			}
-			
+
 			// Marshal the message to bytes once
 			messageBytes, err := json.Marshal(message)
 			if err != nil {
@@ -153,7 +154,7 @@ func (h *Hub) Run() {
 				h.RUnlock()
 				continue
 			}
-			
+
 			// Send to all clients in the channel
 			for client := range clients {
 				// For messages with encrypted data, we don't need to encrypt again
@@ -167,14 +168,14 @@ func (h *Hub) Run() {
 					}
 					continue
 				}
-				
+
 				// For regular messages, encrypt with the client's channel key
 				encryptedMsg := *message
-				
+
 				client.encryptionMutex.RLock()
-				channelKey, hasKey := client.encryptionKeys[message.Channel]
+				_, hasKey := client.encryptionKeys[message.Channel]
 				client.encryptionMutex.RUnlock()
-				
+
 				// If client has a channel key, encrypt the message
 				if hasKey && message.Payload != nil {
 					// Encrypt the payload
@@ -183,18 +184,18 @@ func (h *Hub) Run() {
 						log.Printf("Error encrypting message: %v", err)
 						continue
 					}
-					
+
 					// Set encrypted data and clear payload
 					encryptedMsg.EncryptedData = encryptedData
 					encryptedMsg.Payload = nil
-					
+
 					// Marshal the encrypted message
 					encryptedBytes, err := json.Marshal(encryptedMsg)
 					if err != nil {
 						log.Printf("Error marshaling encrypted message: %v", err)
 						continue
 					}
-					
+
 					select {
 					case client.send <- encryptedBytes:
 					default:
@@ -222,47 +223,51 @@ func (h *Hub) Run() {
 func (h *Hub) JoinChannel(client *Client, channel string) {
 	h.Lock()
 	defer h.Unlock()
-	
+
 	// Initialize channel if it doesn't exist
 	if _, ok := h.channels[channel]; !ok {
 		h.channels[channel] = make(map[*Client]bool)
 	}
-	
+
 	// Add client to channel
 	h.channels[channel][client] = true
-	
+
 	// Initialize user channels if they don't exist
 	if _, ok := h.userChannels[client.userID]; !ok {
 		h.userChannels[client.userID] = make(map[string]bool)
 	}
-	
+
 	// Add channel to user channels
 	h.userChannels[client.userID][channel] = true
-	
+
 	// Generate a channel key for the client if they don't have one
 	client.encryptionMutex.RLock()
 	_, hasKey := client.encryptionKeys[channel]
 	client.encryptionMutex.RUnlock()
-	
+
 	if !hasKey {
-		// Generate a random key for this channel
-		channelKey := generateRandomKey(32)
-		
+		// Initialize the user's channel key map
 		client.encryptionMutex.Lock()
-		client.encryptionKeys[channel] = channelKey
-		client.encryptionMutex.Unlock()
-		
-		// Send key exchange message to the client
-		keyExchangeMsg := &Message{
-			Type:    "key_exchange",
-			Channel: channel,
-			Payload: json.RawMessage(`{"channelKey":"` + channelKey + `"}`),
+		if client.encryptionKeys == nil {
+			client.encryptionKeys = make(map[string]string)
 		}
 		
-		msgBytes, _ := json.Marshal(keyExchangeMsg)
+		// Generate and store a random key for this channel
+		client.encryptionKeys[channel] = generateRandomKey(32)
+		client.encryptionMutex.Unlock()
+		
+		// Send channel join success message
+		joinMsg := &Message{
+			Type:      "system",
+			Channel:   channel,
+			Timestamp: time.Now().UnixNano() / int64(time.Millisecond),
+			Payload:   json.RawMessage(`{"action":"joined"}`),
+		}
+
+		msgBytes, _ := json.Marshal(joinMsg)
 		client.send <- msgBytes
 	}
-	
+
 	// Send user joined notification to channel
 	h.sendUserStatusUpdate(client.userID, channel, true)
 }
@@ -271,22 +276,22 @@ func (h *Hub) JoinChannel(client *Client, channel string) {
 func (h *Hub) LeaveChannel(client *Client, channel string) {
 	h.Lock()
 	defer h.Unlock()
-	
+
 	// Remove client from channel
 	if clients, ok := h.channels[channel]; ok {
 		delete(clients, client)
 	}
-	
+
 	// Remove channel from user channels
 	if channels, ok := h.userChannels[client.userID]; ok {
 		delete(channels, channel)
 	}
-	
+
 	// Remove channel key
 	client.encryptionMutex.Lock()
 	delete(client.encryptionKeys, channel)
 	client.encryptionMutex.Unlock()
-	
+
 	// Send user left notification to channel
 	h.sendUserStatusUpdate(client.userID, channel, false)
 }
@@ -297,15 +302,35 @@ func (h *Hub) sendUserStatusUpdate(userID, channel string, joined bool) {
 	if joined {
 		statusType = "user_joined"
 	}
-	
+
 	statusMsg := &Message{
 		Type:      statusType,
 		Channel:   channel,
 		UserID:    userID,
 		Timestamp: time.Now().Unix(),
 	}
-	
+
 	h.broadcast <- statusMsg
+}
+
+// SendToUser sends a message to a specific user
+func (h *Hub) SendToUser(userID int, message []byte) {
+	h.RLock()
+	defer h.RUnlock()
+	
+	// Convert int userID to string to match our structure
+	userIDStr := fmt.Sprintf("%d", userID)
+	
+	// Find all clients with this userID
+	for client := range h.clients {
+		if client.userID == userIDStr {
+			select {
+			case client.send <- message:
+			default:
+				go h.UnregisterClient(client)
+			}
+		}
+	}
 }
 
 // Handler handles WebSocket connections
@@ -315,23 +340,23 @@ func (h *Hub) Handler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Missing userId parameter", http.StatusBadRequest)
 		return
 	}
-	
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("Error upgrading connection: %v", err)
 		return
 	}
-	
+
 	client := &Client{
-		hub:             h,
-		conn:            conn,
-		send:            make(chan []byte, 256),
-		userID:          userID,
-		encryptionKeys:  make(map[string]string),
+		hub:            h,
+		conn:           conn,
+		send:           make(chan []byte, 256),
+		userID:         userID,
+		encryptionKeys: make(map[string]string),
 	}
-	
+
 	h.RegisterClient(client)
-	
+
 	// Handle WebSocket connection
 	go client.writePump()
 	go client.readPump()
@@ -343,11 +368,11 @@ func (c *Client) readPump() {
 		c.hub.UnregisterClient(c)
 		c.conn.Close()
 	}()
-	
+
 	c.conn.SetReadLimit(maxMessageSize)
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
-	
+
 	for {
 		_, data, err := c.conn.ReadMessage()
 		if err != nil {
@@ -356,21 +381,21 @@ func (c *Client) readPump() {
 			}
 			break
 		}
-		
+
 		var msg Message
 		if err := json.Unmarshal(data, &msg); err != nil {
 			log.Printf("Error decoding message: %v", err)
 			continue
 		}
-		
+
 		// Set user ID from the connection
 		msg.UserID = c.userID
-		
+
 		// Set timestamp if not set
 		if msg.Timestamp == 0 {
 			msg.Timestamp = time.Now().Unix()
 		}
-		
+
 		// Handle message based on type
 		switch msg.Type {
 		case "join_channel":
@@ -382,7 +407,7 @@ func (c *Client) readPump() {
 				continue
 			}
 			c.hub.JoinChannel(c, payload.Channel)
-			
+
 		case "leave_channel":
 			var payload struct {
 				Channel string `json:"channel"`
@@ -392,7 +417,7 @@ func (c *Client) readPump() {
 				continue
 			}
 			c.hub.LeaveChannel(c, payload.Channel)
-			
+
 		case "key_exchange_response":
 			var payload struct {
 				Channel    string `json:"channel"`
@@ -402,23 +427,23 @@ func (c *Client) readPump() {
 				log.Printf("Error parsing key exchange payload: %v", err)
 				continue
 			}
-			
+
 			c.encryptionMutex.Lock()
 			c.encryptionKeys[payload.Channel] = payload.ChannelKey
 			c.encryptionMutex.Unlock()
-			
+
 		case "chat_message":
 			// If message has encrypted data, broadcast as is
 			if msg.EncryptedData != "" {
 				c.hub.BroadcastMessage(&msg)
 				continue
 			}
-			
+
 			// Get channel key
 			c.encryptionMutex.RLock()
-			channelKey, hasKey := c.encryptionKeys[msg.Channel]
+			_, hasKey := c.encryptionKeys[msg.Channel]
 			c.encryptionMutex.RUnlock()
-			
+
 			// If client has a channel key, encrypt the message
 			if hasKey && msg.Payload != nil {
 				// Encrypt the payload
@@ -427,15 +452,15 @@ func (c *Client) readPump() {
 					log.Printf("Error encrypting message: %v", err)
 					continue
 				}
-				
+
 				// Set encrypted data and clear payload
 				msg.EncryptedData = encryptedData
 				msg.Payload = nil
 			}
-			
+
 			// Broadcast the message
 			c.hub.BroadcastMessage(&msg)
-			
+
 		default:
 			// For other message types, broadcast as is
 			c.hub.BroadcastMessage(&msg)
@@ -450,7 +475,7 @@ func (c *Client) writePump() {
 		ticker.Stop()
 		c.conn.Close()
 	}()
-	
+
 	for {
 		select {
 		case message, ok := <-c.send:
@@ -460,20 +485,20 @@ func (c *Client) writePump() {
 				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
-			
+
 			w, err := c.conn.NextWriter(websocket.TextMessage)
 			if err != nil {
 				return
 			}
 			w.Write(message)
-			
+
 			// Add queued messages to the current websocket message
 			n := len(c.send)
 			for i := 0; i < n; i++ {
 				w.Write([]byte{'\n'})
 				w.Write(<-c.send)
 			}
-			
+
 			if err := w.Close(); err != nil {
 				return
 			}
@@ -494,4 +519,4 @@ func generateRandomKey(length int) string {
 		b[i] = charset[time.Now().UnixNano()%int64(len(charset))]
 	}
 	return string(b)
-} 
+}

@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"awesomeProject/internal/models"
-	"awesomeProject/internal/database"
+	"saas-chat-system/internal/database"
+	"saas-chat-system/internal/models"
 )
 
 // Upgrader for WebSocket connections
@@ -22,43 +22,43 @@ var Upgrader = websocket.Upgrader{
 	},
 }
 
-// Client represents a WebSocket client connection
-type Client struct {
-	ID     int
-	Conn   *websocket.Conn
-	Send   chan []byte
-	Hub    *Hub
-	mu     sync.Mutex
+// SimpleClient represents a WebSocket client connection (simplified version)
+type SimpleClient struct {
+	ID   int
+	Conn *websocket.Conn
+	Send chan []byte
+	Hub  *SimpleHub
+	mu   sync.Mutex
 }
 
-// Hub maintains the set of active clients and broadcasts messages
-type Hub struct {
-	clients    map[int]*Client
+// SimpleHub maintains the set of active clients and broadcasts messages (simplified version)
+type SimpleHub struct {
+	clients    map[int]*SimpleClient
 	broadcast  chan []byte
-	register   chan *Client
-	unregister chan *Client
+	register   chan *SimpleClient
+	unregister chan *SimpleClient
 	mu         sync.RWMutex
 }
 
-// Message represents a WebSocket message
-type Message struct {
+// SimpleMessage represents a WebSocket message (simplified version)
+type SimpleMessage struct {
 	Type    string          `json:"type"`
 	UserID  int             `json:"user_id"`
 	Content json.RawMessage `json:"content"`
 }
 
-// NewHub creates a new Hub instance
-func NewHub() *Hub {
-	return &Hub{
-		clients:    make(map[int]*Client),
+// NewSimpleHub creates a new SimpleHub instance
+func NewSimpleHub() *SimpleHub {
+	return &SimpleHub{
+		clients:    make(map[int]*SimpleClient),
 		broadcast:  make(chan []byte),
-		register:   make(chan *Client),
-		unregister: make(chan *Client),
+		register:   make(chan *SimpleClient),
+		unregister: make(chan *SimpleClient),
 	}
 }
 
-// Run starts the hub
-func (h *Hub) Run() {
+// Run starts the simple hub
+func (h *SimpleHub) Run() {
 	for {
 		select {
 		case client := <-h.register:
@@ -90,12 +90,12 @@ func (h *Hub) Run() {
 }
 
 // Broadcast sends a message to all connected clients
-func (h *Hub) Broadcast(message []byte) {
+func (h *SimpleHub) Broadcast(message []byte) {
 	h.broadcast <- message
 }
 
 // SendToUser sends a message to a specific user
-func (h *Hub) SendToUser(userID int, message []byte) {
+func (h *SimpleHub) SendToUser(userID int, message []byte) {
 	h.mu.RLock()
 	if client, ok := h.clients[userID]; ok {
 		select {
@@ -108,9 +108,9 @@ func (h *Hub) SendToUser(userID int, message []byte) {
 	h.mu.RUnlock()
 }
 
-// HandleWebSocket handles WebSocket connections
-func (h *Hub) HandleWebSocket(conn *websocket.Conn, userID int) {
-	client := &Client{
+// HandleSimpleWebSocket handles WebSocket connections for the simplified version
+func (h *SimpleHub) HandleSimpleWebSocket(conn *websocket.Conn, userID int) {
+	client := &SimpleClient{
 		ID:   userID,
 		Conn: conn,
 		Send: make(chan []byte, 256),
@@ -120,12 +120,12 @@ func (h *Hub) HandleWebSocket(conn *websocket.Conn, userID int) {
 	h.register <- client
 
 	// Start goroutines for reading and writing
-	go client.writePump()
-	go client.readPump()
+	go client.simplReadPump()
+	go client.simpleWritePump()
 }
 
-// readPump pumps messages from the WebSocket connection to the hub
-func (c *Client) readPump() {
+// simplReadPump pumps messages from the WebSocket connection to the hub
+func (c *SimpleClient) simplReadPump() {
 	defer func() {
 		c.Hub.unregister <- c
 		c.Conn.Close()
@@ -140,7 +140,7 @@ func (c *Client) readPump() {
 			break
 		}
 
-		var msg Message
+		var msg SimpleMessage
 		if err := json.Unmarshal(message, &msg); err != nil {
 			log.Printf("error unmarshaling message: %v", err)
 			continue
@@ -164,8 +164,8 @@ func (c *Client) readPump() {
 	}
 }
 
-// writePump pumps messages from the hub to the WebSocket connection
-func (c *Client) writePump() {
+// simpleWritePump pumps messages from the hub to the WebSocket connection
+func (c *SimpleClient) simpleWritePump() {
 	defer func() {
 		c.Conn.Close()
 	}()
@@ -246,14 +246,12 @@ func ReadPump(hub *models.Hub, client *models.Client) {
 			hub.PrivateMessages <- msg
 
 		case "group":
-			if groupID, err := saveGroupMessage(client, msg); err == nil {
-				msg.GroupID = groupID
+			if _, err := saveGroupMessage(client, msg); err == nil {
 				hub.GroupMessages <- msg
 			}
 
-		case "notification":
+		case "topic":
 			if _, err := saveTopicMessage(client, msg); err == nil {
-				msg.TopicName = msg.TopicName // Already set
 				hub.TopicMessages <- msg
 			}
 		}
@@ -377,4 +375,4 @@ func saveTopicMessage(client *models.Client, msg models.Message) (int, error) {
 	}
 
 	return topicID, nil
-} 
+}

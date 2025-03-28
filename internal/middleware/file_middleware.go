@@ -1,10 +1,11 @@
 package middleware
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
-	"awesomeProject/internal/services"
+	"saas-chat-system/internal/services"
 )
 
 // FileUploadMiddleware handles file upload limits based on subscription
@@ -56,11 +57,11 @@ func (m *FileUploadMiddleware) HandleFileUpload(next http.HandlerFunc) http.Hand
 		}
 
 		// Convert subscription limits to bytes
-		maxFileSize := subscription.Plan.Limits.MaxFileSizeMB * 1024 * 1024
+		maxFileSize := subscription.Plan2.Limits.MaxFileSize * 1024 * 1024
 
 		// Check file size against subscription limit
 		if contentLength > maxFileSize {
-			http.Error(w, fmt.Sprintf("File size exceeds subscription limit of %d MB", subscription.Plan.Limits.MaxFileSizeMB), http.StatusForbidden)
+			http.Error(w, fmt.Sprintf("File size exceeds subscription limit of %d MB", subscription.Plan2.Limits.MaxFileSize/1024/1024), http.StatusForbidden)
 			return
 		}
 
@@ -72,13 +73,29 @@ func (m *FileUploadMiddleware) HandleFileUpload(next http.HandlerFunc) http.Hand
 		}
 
 		// Convert storage limits to bytes
-		maxStorage := subscription.Plan.Limits.MaxStorageGB * 1024 * 1024 * 1024
+		maxStorage := subscription.Plan2.Limits.StorageGB * 1024 * 1024 * 1024
 		currentUsage := usage.StorageUsed
 
 		// Check if new file would exceed storage limit
 		if currentUsage+contentLength > maxStorage {
-			http.Error(w, fmt.Sprintf("Storage limit of %d GB would be exceeded", subscription.Plan.Limits.MaxStorageGB), http.StatusForbidden)
+			http.Error(w, fmt.Sprintf("Storage limit of %d GB would be exceeded", subscription.Plan2.Limits.StorageGB), http.StatusForbidden)
 			return
+		}
+
+		// Check if user has exceeded storage limit
+		if subscription != nil && subscription.Plan2 != nil {
+			if usage.StorageUsed >= subscription.Plan2.Limits.StorageGB {
+				http.Error(w, fmt.Sprintf("Storage limit of %d GB exceeded", subscription.Plan2.Limits.StorageGB), http.StatusForbidden)
+				return
+			}
+		}
+
+		// Check if user has exceeded file upload limit
+		if subscription != nil && subscription.Plan2 != nil {
+			if usage.FilesUploaded >= subscription.Plan2.Limits.MaxDailyUploads {
+				http.Error(w, fmt.Sprintf("Daily file upload limit of %d files exceeded", subscription.Plan2.Limits.MaxDailyUploads), http.StatusForbidden)
+				return
+			}
 		}
 
 		// All checks passed, proceed with the request
@@ -92,4 +109,4 @@ func getUserIDFromContext(ctx context.Context) (int, error) {
 	// TODO: Implement user ID retrieval from context
 	// This should be set by authentication middleware
 	return 0, fmt.Errorf("not implemented")
-} 
+}

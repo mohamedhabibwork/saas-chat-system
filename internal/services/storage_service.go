@@ -8,14 +8,24 @@ import (
 	"mime/multipart"
 	"os"
 	"path/filepath"
+	"time"
 
-	"awesomeProject/internal/config"
-	"awesomeProject/internal/models"
+	"saas-chat-system/internal/config"
+	"saas-chat-system/internal/models"
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
+
+// Define Database interface
+type Database interface {
+	Query(query string, args ...interface{}) (*sql.Rows, error)
+	QueryRow(query string, args ...interface{}) *sql.Row
+	Exec(query string, args ...interface{}) (sql.Result, error)
+	Begin() (*sql.Tx, error)
+	Close() error
+}
 
 // StorageService handles file storage operations
 type StorageService struct {
@@ -31,9 +41,9 @@ func NewStorageService(db Database, subscriptionService *SubscriptionService) (*
 
 	if cfg.Storage.Type == "s3" {
 		// Configure AWS SDK
-		awsCfg, err := config.LoadDefaultConfig(context.TODO(),
-			config.WithRegion(cfg.Storage.S3.Region),
-			config.WithCredentials(credentials.NewStaticCredentialsProvider(
+		awsCfg, err := awsconfig.LoadDefaultConfig(context.TODO(),
+			awsconfig.WithRegion(cfg.Storage.S3.Region),
+			awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
 				cfg.Storage.S3.AccessKeyID,
 				cfg.Storage.S3.SecretAccessKey,
 				"",
@@ -72,7 +82,7 @@ func (s *StorageService) UploadFile(userID int, file *multipart.FileHeader) (*mo
 	}
 
 	// Check subscription limits
-	if err := s.checkStorageLimit(userID); err != nil {
+	if err := s.checkStorageLimitTx(tx, userID); err != nil {
 		return nil, err
 	}
 
@@ -143,8 +153,14 @@ func (s *StorageService) UploadFile(userID int, file *multipart.FileHeader) (*mo
 	}
 
 	// Update subscription usage
-	if err := s.subscriptionService.UpdateFileUsage(subscription.ID, file.Size); err != nil {
-		return nil, fmt.Errorf("failed to update usage: %v", err)
+	if subscription != nil {
+		var subscriptionIDInt int
+		if _, err := fmt.Sscanf(subscription.ID, "%d", &subscriptionIDInt); err != nil {
+			return nil, fmt.Errorf("invalid subscription ID format: %v", err)
+		}
+		if err := s.subscriptionService.UpdateStorageUsage(subscriptionIDInt, file.Size); err != nil {
+			return nil, fmt.Errorf("failed to update storage usage: %v", err)
+		}
 	}
 
 	// Commit transaction
@@ -165,7 +181,7 @@ func (s *StorageService) DeleteFile(fileID int, userID int) error {
 	defer tx.Rollback()
 
 	// Get file record
-	file, err := s.getFileRecord(fileID)
+	file, err := s.getFileRecordTx(tx, fileID)
 	if err != nil {
 		return err
 	}
@@ -206,15 +222,26 @@ func (s *StorageService) DeleteFile(fileID int, userID int) error {
 	}
 
 	// Update subscription usage
-	if err := s.subscriptionService.UpdateStorageUsage(subscription.ID, -file.Size); err != nil {
-		return fmt.Errorf("failed to update usage: %v", err)
+	if subscription != nil {
+		var subscriptionIDInt int
+		if _, err := fmt.Sscanf(subscription.ID, "%d", &subscriptionIDInt); err != nil {
+			return fmt.Errorf("invalid subscription ID format: %v", err)
+		}
+		if err := s.subscriptionService.UpdateStorageUsage(subscriptionIDInt, -file.Size); err != nil {
+			return fmt.Errorf("failed to update storage usage: %v", err)
+		}
 	}
 
 	// Commit transaction
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %v", err)
+	}
+
+	return nil
+}
+
 // GetFile retrieves a file
-func (s *StorageService) GetFile(fileID int, userID int) (*models.File, io.ReadCloser, error) {
+func (s *StorageService) GetFile(fileID, userID int) (*models.File, io.ReadCloser, error) {
 	// Get file record
 	file, err := s.getFileRecord(fileID)
 	if err != nil {
@@ -289,15 +316,55 @@ func (s *StorageService) checkStorageLimit(userID int) error {
 		return err
 	}
 
-	// Get current storage usage
-	usage, err := s.getStorageUsage(userID)
+	// Check storage limits
+	if subscription.Plan2.Limits.StorageGB > 0 {
+		// Get current storage usage
+		var currentUsage int64
+		err = s.db.QueryRow(`
+			SELECT COALESCE(SUM(size), 0)
+			FROM files
+			WHERE user_id = $1
+		`, userID).Scan(&currentUsage)
+		if err != nil {
+			return fmt.Errorf("failed to get storage usage: %v", err)
+		}
+
+		// Convert to GB
+		currentUsageGB := currentUsage / (1024 * 1024 * 1024)
+		if currentUsageGB >= subscription.Plan2.Limits.StorageGB {
+			return fmt.Errorf("storage limit exceeded")
+		}
+	}
+
+	return nil
+}
+
+// checkStorageLimitTx checks storage limit within a transaction
+func (s *StorageService) checkStorageLimitTx(tx *sql.Tx, userID int) error {
+	// Get user's subscription
+	subscription, err := s.getUserSubscriptionTx(tx, userID)
 	if err != nil {
 		return err
 	}
 
-	// Check if usage exceeds limit
-	if usage >= subscription.Plan.Limits.MaxStorageGB*1024*1024*1024 {
-		return fmt.Errorf("storage limit exceeded")
+	// Check storage limits
+	if subscription.Plan2.Limits.StorageGB > 0 {
+		// Get current storage usage
+		var currentUsage int64
+		err = tx.QueryRow(`
+			SELECT COALESCE(SUM(size), 0)
+			FROM files
+			WHERE user_id = $1
+		`, userID).Scan(&currentUsage)
+		if err != nil {
+			return fmt.Errorf("failed to get storage usage: %v", err)
+		}
+
+		// Convert to GB
+		currentUsageGB := currentUsage / (1024 * 1024 * 1024)
+		if currentUsageGB >= subscription.Plan2.Limits.StorageGB {
+			return fmt.Errorf("storage limit exceeded")
+		}
 	}
 
 	return nil
@@ -316,16 +383,51 @@ func (s *StorageService) getUserSubscription(userID int) (*models.Subscription, 
 		LIMIT 1
 	`
 	var subscription models.Subscription
+	subscription.Plan2 = &models.Plan{}
+	
 	err := s.db.QueryRow(query, userID).Scan(
 		&subscription.ID, &subscription.UserID, &subscription.PlanID,
 		&subscription.Status, &subscription.StartDate, &subscription.EndDate,
 		&subscription.AutoRenew, &subscription.PaymentMethod,
 		&subscription.CreatedAt, &subscription.UpdatedAt,
-		&subscription.Plan.ID, &subscription.Plan.Name,
-		&subscription.Plan.Description, &subscription.Plan.Price,
-		&subscription.Plan.Interval, &subscription.Plan.Features,
-		&subscription.Plan.Limits, &subscription.Plan.CreatedAt,
-		&subscription.Plan.UpdatedAt,
+		&subscription.Plan2.ID, &subscription.Plan2.Name,
+		&subscription.Plan2.Description, &subscription.Plan2.Price,
+		&subscription.Plan2.Interval, &subscription.Plan2.Features,
+		&subscription.Plan2.Limits, &subscription.Plan2.CreatedAt,
+		&subscription.Plan2.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &subscription, nil
+}
+
+// getUserSubscriptionTx gets a user's subscription within a transaction
+func (s *StorageService) getUserSubscriptionTx(tx *sql.Tx, userID int) (*models.Subscription, error) {
+	query := `
+		SELECT s.id, s.user_id, s.plan_id, s.status, s.start_date, s.end_date,
+			   s.auto_renew, s.payment_method, s.created_at, s.updated_at,
+			   p.id, p.name, p.description, p.price, p.interval, p.features,
+			   p.limits, p.created_at, p.updated_at
+		FROM subscriptions s
+		JOIN plans p ON s.plan_id = p.id
+		WHERE s.user_id = $1 AND s.status = 'active'
+		ORDER BY s.created_at DESC
+		LIMIT 1
+	`
+	var subscription models.Subscription
+	subscription.Plan2 = &models.Plan{}
+	
+	err := tx.QueryRow(query, userID).Scan(
+		&subscription.ID, &subscription.UserID, &subscription.PlanID,
+		&subscription.Status, &subscription.StartDate, &subscription.EndDate,
+		&subscription.AutoRenew, &subscription.PaymentMethod,
+		&subscription.CreatedAt, &subscription.UpdatedAt,
+		&subscription.Plan2.ID, &subscription.Plan2.Name,
+		&subscription.Plan2.Description, &subscription.Plan2.Price,
+		&subscription.Plan2.Interval, &subscription.Plan2.Features,
+		&subscription.Plan2.Limits, &subscription.Plan2.CreatedAt,
+		&subscription.Plan2.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -347,13 +449,28 @@ func (s *StorageService) getStorageUsage(userID int) (int64, error) {
 	return usage, nil
 }
 
-func (s *StorageService) saveFileRecord(file *models.File) error {
+// getStorageUsageTx gets storage usage within a transaction
+func (s *StorageService) getStorageUsageTx(tx *sql.Tx, userID int) (int64, error) {
+	query := `
+		SELECT COALESCE(SUM(size), 0)
+		FROM files
+		WHERE user_id = $1
+	`
+	var usage int64
+	err := tx.QueryRow(query, userID).Scan(&usage)
+	if err != nil {
+		return 0, err
+	}
+	return usage, nil
+}
+
+func (s *StorageService) saveFileRecord(tx *sql.Tx, file *models.File) error {
 	query := `
 		INSERT INTO files (user_id, filename, filepath, url, size, content_type, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, NOW())
 		RETURNING id
 	`
-	return s.db.QueryRow(
+	return tx.QueryRow(
 		query,
 		file.UserID, file.Filename, file.Filepath,
 		file.URL, file.Size, file.ContentType,
@@ -378,9 +495,28 @@ func (s *StorageService) getFileRecord(fileID int) (*models.File, error) {
 	return &file, nil
 }
 
-func (s *StorageService) deleteFileRecord(fileID int) error {
+// getFileRecordTx gets a file record using a transaction
+func (s *StorageService) getFileRecordTx(tx *sql.Tx, fileID int) (*models.File, error) {
+	query := `
+		SELECT id, user_id, filename, filepath, url, size, content_type, created_at
+		FROM files
+		WHERE id = $1
+	`
+	var file models.File
+	err := tx.QueryRow(query, fileID).Scan(
+		&file.ID, &file.UserID, &file.Filename,
+		&file.Filepath, &file.URL, &file.Size,
+		&file.ContentType, &file.CreatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &file, nil
+}
+
+func (s *StorageService) deleteFileRecord(tx *sql.Tx, fileID int) error {
 	query := "DELETE FROM files WHERE id = $1"
-	_, err := s.db.Exec(query, fileID)
+	_, err := tx.Exec(query, fileID)
 	return err
 }
 

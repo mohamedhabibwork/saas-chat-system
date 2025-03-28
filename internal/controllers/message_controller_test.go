@@ -7,8 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"awesomeProject/internal/models"
-	"awesomeProject/internal/websocket"
+	"saas-chat-system/internal/models"
+	"saas-chat-system/internal/websocket"
 )
 
 func TestMessageController_SendMessage(t *testing.T) {
@@ -403,4 +403,4 @@ func TestMessageController_GetMessageHistory(t *testing.T) {
 			}
 		})
 	}
-} 
+}

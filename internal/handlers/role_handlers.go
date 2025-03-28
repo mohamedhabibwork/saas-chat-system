@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"awesomeProject/internal/models"
-	"awesomeProject/internal/services"
+	"saas-chat-system/internal/models"
+	"saas-chat-system/internal/services"
 )
 
 // CreateRoleRequest represents the role creation request body
@@ -26,7 +26,14 @@ type AssignPermissionsRequest struct {
 	PermissionIDs []int `json:"permission_ids"`
 }
 
-// HandleListRoles handles listing all roles
+// @Summary      List roles
+// @Description  Get a list of all roles
+// @Tags         Roles
+// @Accept       json
+// @Produce      json
+// @Success      200 {array} models.Role "List of roles"
+// @Failure      500 {object} map[string]interface{} "Internal Server Error"
+// @Router       /api/v1/roles [get]
 func HandleListRoles(roleService *services.RoleService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -44,7 +51,16 @@ func HandleListRoles(roleService *services.RoleService) http.HandlerFunc {
 	}
 }
 
-// HandleCreateRole handles creating a new role
+// @Summary      Create role
+// @Description  Create a new role
+// @Tags         Roles
+// @Accept       json
+// @Produce      json
+// @Param        role body CreateRoleRequest true "Role details"
+// @Success      201 {object} models.Role "Role created successfully"
+// @Failure      400 {object} map[string]interface{} "Bad Request"
+// @Failure      500 {object} map[string]interface{} "Internal Server Error"
+// @Router       /api/v1/roles [post]
 func HandleCreateRole(roleService *services.RoleService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -79,7 +95,17 @@ func HandleCreateRole(roleService *services.RoleService) http.HandlerFunc {
 	}
 }
 
-// HandleUpdateRole handles updating an existing role
+// @Summary      Update role
+// @Description  Update an existing role
+// @Tags         Roles
+// @Accept       json
+// @Produce      json
+// @Param        id query integer true "Role ID"
+// @Param        role body UpdateRoleRequest true "Role details"
+// @Success      200 {object} models.Role "Role updated successfully"
+// @Failure      400 {object} map[string]interface{} "Bad Request"
+// @Failure      500 {object} map[string]interface{} "Internal Server Error"
+// @Router       /api/v1/roles/{id} [put]
 func HandleUpdateRole(roleService *services.RoleService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut {
@@ -122,7 +148,16 @@ func HandleUpdateRole(roleService *services.RoleService) http.HandlerFunc {
 	}
 }
 
-// HandleDeleteRole handles deleting a role
+// @Summary      Delete role
+// @Description  Delete a role
+// @Tags         Roles
+// @Accept       json
+// @Produce      json
+// @Param        id query integer true "Role ID"
+// @Success      200 {object} map[string]interface{} "Role deleted successfully"
+// @Failure      400 {object} map[string]interface{} "Bad Request"
+// @Failure      500 {object} map[string]interface{} "Internal Server Error"
+// @Router       /api/v1/roles/{id} [delete]
 func HandleDeleteRole(roleService *services.RoleService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete {
@@ -146,7 +181,14 @@ func HandleDeleteRole(roleService *services.RoleService) http.HandlerFunc {
 	}
 }
 
-// HandleListPermissions handles listing all permissions
+// @Summary      List permissions
+// @Description  Get a list of all permissions
+// @Tags         Roles
+// @Accept       json
+// @Produce      json
+// @Success      200 {array} models.Permission "List of permissions"
+// @Failure      500 {object} map[string]interface{} "Internal Server Error"
+// @Router       /api/v1/permissions [get]
 func HandleListPermissions(roleService *services.RoleService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -164,7 +206,17 @@ func HandleListPermissions(roleService *services.RoleService) http.HandlerFunc {
 	}
 }
 
-// HandleAssignPermissions handles assigning permissions to a role
+// @Summary      Assign permissions
+// @Description  Assign permissions to a role
+// @Tags         Roles
+// @Accept       json
+// @Produce      json
+// @Param        role_id query integer true "Role ID"
+// @Param        request body AssignPermissionsRequest true "Permission IDs"
+// @Success      200 {object} map[string]interface{} "Permissions assigned successfully"
+// @Failure      400 {object} map[string]interface{} "Bad Request"
+// @Failure      500 {object} map[string]interface{} "Internal Server Error"
+// @Router       /api/v1/roles/{role_id}/permissions [post]
 func HandleAssignPermissions(roleService *services.RoleService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -223,4 +275,4 @@ func HandleGetRolePermissions(roleService *services.RoleService) http.HandlerFun
 
 		sendResponse(w, true, permissions, "", http.StatusOK)
 	}
-} 
+}

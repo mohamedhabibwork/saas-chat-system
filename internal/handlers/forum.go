@@ -5,8 +5,8 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/mohamedhabibwork/saas-chat-system/internal/models"
-	"github.com/mohamedhabibwork/saas-chat-system/internal/services"
+	"saas-chat-system/internal/models"
+	"saas-chat-system/internal/services"
 )
 
 // ForumHandler handles forum-related HTTP requests
@@ -21,7 +21,16 @@ func NewForumHandler(forumService *services.ForumService) *ForumHandler {
 	}
 }
 
-// CreateCategory handles requests to create a new forum category
+// @Summary      Create forum category
+// @Description  Create a new forum category
+// @Tags         Forum
+// @Accept       json
+// @Produce      json
+// @Param        category body models.ForumCategory true "Category details"
+// @Success      201 {object} models.ForumCategory "Category created successfully"
+// @Failure      400 {object} map[string]interface{} "Bad Request"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Router       /api/v1/forum/categories [post]
 func (h *ForumHandler) CreateCategory(c *gin.Context) {
 	var category models.ForumCategory
 	if err := c.ShouldBindJSON(&category); err != nil {
@@ -45,7 +54,16 @@ func (h *ForumHandler) CreateCategory(c *gin.Context) {
 	c.JSON(http.StatusCreated, category)
 }
 
-// CreateTopic handles requests to create a new forum topic
+// @Summary      Create forum topic
+// @Description  Create a new forum topic
+// @Tags         Forum
+// @Accept       json
+// @Produce      json
+// @Param        topic body models.ForumTopic true "Topic details"
+// @Success      201 {object} models.ForumTopic "Topic created successfully"
+// @Failure      400 {object} map[string]interface{} "Bad Request"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Router       /api/v1/forum/topics [post]
 func (h *ForumHandler) CreateTopic(c *gin.Context) {
 	var topic models.ForumTopic
 	if err := c.ShouldBindJSON(&topic); err != nil {
@@ -76,7 +94,18 @@ func (h *ForumHandler) CreateTopic(c *gin.Context) {
 	c.JSON(http.StatusCreated, topic)
 }
 
-// CreatePost handles requests to create a new post in a topic
+// @Summary      Create forum post
+// @Description  Create a new post in a forum topic
+// @Tags         Forum
+// @Accept       json
+// @Produce      json
+// @Param        id path string true "Topic ID"
+// @Param        post body models.ForumPost true "Post details"
+// @Success      201 {object} models.ForumPost "Post created successfully"
+// @Failure      400 {object} map[string]interface{} "Bad Request"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Failure      404 {object} map[string]interface{} "Topic not found"
+// @Router       /api/v1/forum/topics/{id}/posts [post]
 func (h *ForumHandler) CreatePost(c *gin.Context) {
 	topicID := c.Param("id")
 	var post models.ForumPost
@@ -102,7 +131,14 @@ func (h *ForumHandler) CreatePost(c *gin.Context) {
 	c.JSON(http.StatusCreated, post)
 }
 
-// GetCategories handles requests to retrieve forum categories
+// @Summary      Get forum categories
+// @Description  Get all forum categories
+// @Tags         Forum
+// @Accept       json
+// @Produce      json
+// @Success      200 {array} models.ForumCategory "List of categories"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Router       /api/v1/forum/categories [get]
 func (h *ForumHandler) GetCategories(c *gin.Context) {
 	tenantID, exists := c.Get("tenant_id")
 	if !exists {
@@ -119,7 +155,18 @@ func (h *ForumHandler) GetCategories(c *gin.Context) {
 	c.JSON(http.StatusOK, categories)
 }
 
-// GetTopics handles requests to retrieve topics in a category
+// @Summary      Get topics in category
+// @Description  Get all topics in a specific category
+// @Tags         Forum
+// @Accept       json
+// @Produce      json
+// @Param        id path string true "Category ID"
+// @Param        page query int false "Page number"
+// @Param        limit query int false "Number of topics per page"
+// @Success      200 {array} models.ForumTopic "List of topics"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Failure      404 {object} map[string]interface{} "Category not found"
+// @Router       /api/v1/forum/categories/{id}/topics [get]
 func (h *ForumHandler) GetTopics(c *gin.Context) {
 	categoryID := c.Param("id")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -134,7 +181,18 @@ func (h *ForumHandler) GetTopics(c *gin.Context) {
 	c.JSON(http.StatusOK, topics)
 }
 
-// GetPosts handles requests to retrieve posts in a topic
+// @Summary      Get forum posts
+// @Description  Get all posts in a forum topic
+// @Tags         Forum
+// @Accept       json
+// @Produce      json
+// @Param        id path string true "Topic ID"
+// @Param        page query int false "Page number"
+// @Param        limit query int false "Number of posts per page"
+// @Success      200 {array} models.ForumPost "List of posts"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Failure      404 {object} map[string]interface{} "Topic not found"
+// @Router       /api/v1/forum/topics/{id}/posts [get]
 func (h *ForumHandler) GetPosts(c *gin.Context) {
 	topicID := c.Param("id")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -149,7 +207,16 @@ func (h *ForumHandler) GetPosts(c *gin.Context) {
 	c.JSON(http.StatusOK, posts)
 }
 
-// SubscribeToTopic handles requests to subscribe to a topic
+// @Summary      Subscribe to topic
+// @Description  Subscribe to notifications for a forum topic
+// @Tags         Forum
+// @Accept       json
+// @Produce      json
+// @Param        id path string true "Topic ID"
+// @Success      200 {object} map[string]interface{} "Subscribed successfully"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Failure      404 {object} map[string]interface{} "Topic not found"
+// @Router       /api/v1/forum/topics/{id}/subscribe [post]
 func (h *ForumHandler) SubscribeToTopic(c *gin.Context) {
 	topicID := c.Param("id")
 	userID := c.MustGet("user_id").(string)
@@ -162,7 +229,16 @@ func (h *ForumHandler) SubscribeToTopic(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "subscribed successfully"})
 }
 
-// UnsubscribeFromTopic handles requests to unsubscribe from a topic
+// @Summary      Unsubscribe from topic
+// @Description  Unsubscribe from notifications for a forum topic
+// @Tags         Forum
+// @Accept       json
+// @Produce      json
+// @Param        id path string true "Topic ID"
+// @Success      200 {object} map[string]interface{} "Unsubscribed successfully"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Failure      404 {object} map[string]interface{} "Topic not found"
+// @Router       /api/v1/forum/topics/{id}/subscribe [delete]
 func (h *ForumHandler) UnsubscribeFromTopic(c *gin.Context) {
 	topicID := c.Param("id")
 	userID := c.MustGet("user_id").(string)
@@ -175,7 +251,18 @@ func (h *ForumHandler) UnsubscribeFromTopic(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "unsubscribed successfully"})
 }
 
-// UpdateTopic handles requests to update a forum topic
+// @Summary      Update forum topic
+// @Description  Update an existing forum topic
+// @Tags         Forum
+// @Accept       json
+// @Produce      json
+// @Param        id path string true "Topic ID"
+// @Param        topic body models.ForumTopic true "Updated topic details"
+// @Success      200 {object} models.ForumTopic "Topic updated successfully"
+// @Failure      400 {object} map[string]interface{} "Bad Request"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Failure      404 {object} map[string]interface{} "Topic not found"
+// @Router       /api/v1/forum/topics/{id} [put]
 func (h *ForumHandler) UpdateTopic(c *gin.Context) {
 	topicID := c.Param("id")
 	var topic models.ForumTopic
@@ -193,7 +280,18 @@ func (h *ForumHandler) UpdateTopic(c *gin.Context) {
 	c.JSON(http.StatusOK, topic)
 }
 
-// UpdatePost handles requests to update a forum post
+// @Summary      Update forum post
+// @Description  Update an existing forum post
+// @Tags         Forum
+// @Accept       json
+// @Produce      json
+// @Param        id path string true "Post ID"
+// @Param        post body models.ForumPost true "Updated post details"
+// @Success      200 {object} models.ForumPost "Post updated successfully"
+// @Failure      400 {object} map[string]interface{} "Bad Request"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Failure      404 {object} map[string]interface{} "Post not found"
+// @Router       /api/v1/forum/posts/{id} [put]
 func (h *ForumHandler) UpdatePost(c *gin.Context) {
 	postID := c.Param("id")
 	var post models.ForumPost
@@ -211,7 +309,16 @@ func (h *ForumHandler) UpdatePost(c *gin.Context) {
 	c.JSON(http.StatusOK, post)
 }
 
-// DeleteTopic handles requests to delete a forum topic
+// @Summary      Delete forum topic
+// @Description  Delete an existing forum topic
+// @Tags         Forum
+// @Accept       json
+// @Produce      json
+// @Param        id path string true "Topic ID"
+// @Success      204 "Topic deleted successfully"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Failure      404 {object} map[string]interface{} "Topic not found"
+// @Router       /api/v1/forum/topics/{id} [delete]
 func (h *ForumHandler) DeleteTopic(c *gin.Context) {
 	topicID := c.Param("id")
 
@@ -223,7 +330,16 @@ func (h *ForumHandler) DeleteTopic(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "topic deleted successfully"})
 }
 
-// DeletePost handles requests to delete a forum post
+// @Summary      Delete forum post
+// @Description  Delete an existing forum post
+// @Tags         Forum
+// @Accept       json
+// @Produce      json
+// @Param        id path string true "Post ID"
+// @Success      204 "Post deleted successfully"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Failure      404 {object} map[string]interface{} "Post not found"
+// @Router       /api/v1/forum/posts/{id} [delete]
 func (h *ForumHandler) DeletePost(c *gin.Context) {
 	postID := c.Param("id")
 
@@ -233,4 +349,4 @@ func (h *ForumHandler) DeletePost(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "post deleted successfully"})
-} 
+}

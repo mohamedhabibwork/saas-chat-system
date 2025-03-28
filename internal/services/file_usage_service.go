@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"awesomeProject/internal/models"
+	"saas-chat-system/internal/models"
 )
 
 // FileUsageService handles file usage tracking and limits
@@ -217,4 +217,4 @@ func isAllowedFileType(fileType string, allowedExtensions, allowedMimeTypes []st
 	}
 
 	return false
-} 
+}

@@ -4,22 +4,7 @@ import (
 	"time"
 )
 
-// User represents a user in the system
-type User struct {
-	ID            int       `json:"id"`
-	Username      string    `json:"username"`
-	Email         string    `json:"email"`
-	PasswordHash  string    `json:"-"`
-	FirstName     string    `json:"first_name"`
-	LastName      string    `json:"last_name"`
-	TenantID      int       `json:"tenant_id"`
-	RoleID        int       `json:"role_id"`
-	IsActive      bool      `json:"is_active"`
-	Timezone      string    `json:"timezone"`
-	LastLogin     time.Time `json:"last_login"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
-}
+// User is defined in model_resolver.go
 
 // Role represents a user role
 type Role struct {

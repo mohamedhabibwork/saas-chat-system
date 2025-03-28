@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	"github.com/gorilla/websocket"
-	"awesomeProject/internal/models"
 )
 
 // WebSocketHandler handles WebSocket connections and real-time communication
@@ -46,7 +45,16 @@ func NewWebSocketHandler() *WebSocketHandler {
 	}
 }
 
-// HandleWebSocket handles WebSocket connection requests
+// @Summary      WebSocket connection
+// @Description  Establishes a WebSocket connection for real-time communication
+// @Tags         WebSocket
+// @Accept       json
+// @Produce      json
+// @Param        userId query string true "User ID"
+// @Success      101 {string} string "Switching Protocols"
+// @Failure      400 {object} APIError "Bad Request"
+// @Failure      401 {object} APIError "Unauthorized"
+// @Router       /ws [get]
 func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	userID, err := getUserIDFromContext(r.Context())
 	if err != nil {
@@ -75,7 +83,15 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 	go h.readPump(client)
 }
 
-// SubscribeToChannel subscribes a client to a channel
+// @Summary      Join channel
+// @Description  Join a WebSocket channel for real-time communication
+// @Tags         WebSocket
+// @Accept       json
+// @Produce      json
+// @Param        channel body struct{Channel string} true "Channel to join"
+// @Success      200 {object} Message "Joined channel successfully"
+// @Failure      400 {object} APIError "Bad Request"
+// @Router       /ws/join [post]
 func (h *WebSocketHandler) SubscribeToChannel(userID, channelID int) {
 	h.mu.RLock()
 	client, exists := h.clients[userID]
@@ -86,7 +102,15 @@ func (h *WebSocketHandler) SubscribeToChannel(userID, channelID int) {
 	}
 }
 
-// UnsubscribeFromChannel unsubscribes a client from a channel
+// @Summary      Leave channel
+// @Description  Leave a WebSocket channel
+// @Tags         WebSocket
+// @Accept       json
+// @Produce      json
+// @Param        channel body struct{Channel string} true "Channel to leave"
+// @Success      200 {object} Message "Left channel successfully"
+// @Failure      400 {object} APIError "Bad Request"
+// @Router       /ws/leave [post]
 func (h *WebSocketHandler) UnsubscribeFromChannel(userID, channelID int) {
 	h.mu.RLock()
 	client, exists := h.clients[userID]
@@ -131,6 +155,45 @@ func (h *WebSocketHandler) SendToUser(userID int, message []byte) {
 		}
 	}
 }
+
+// @Summary      WebSocket Message Types
+// @Description  Supported WebSocket message types and their payloads
+// @Tags         WebSocket
+// @Accept       json
+// @Produce      json
+// @Success      200 {object} Message{type=string,channel=string,userId=string,timestamp=integer,payload=object,encryptedData=string,publicKey=string} "Message structure"
+// @Router       /ws/messages [get]
+
+// Message Types:
+// @Summary      Chat Message
+// @Description  Send a chat message to a channel
+// @Tags         WebSocket
+// @Accept       json
+// @Produce      json
+// @Param        message body Message{type=chat_message,channel=string,payload=object} true "Chat message"
+// @Success      200 {object} Message "Message sent successfully"
+// @Failure      400 {object} APIError "Bad Request"
+// @Router       /ws/messages/chat [post]
+
+// @Summary      Private Message
+// @Description  Send a private message to a user
+// @Tags         WebSocket
+// @Accept       json
+// @Produce      json
+// @Param        message body Message{type=private,userId=string,payload=object} true "Private message"
+// @Success      200 {object} Message "Message sent successfully"
+// @Failure      400 {object} APIError "Bad Request"
+// @Router       /ws/messages/private [post]
+
+// @Summary      Key Exchange
+// @Description  Exchange encryption keys for secure communication
+// @Tags         WebSocket
+// @Accept       json
+// @Produce      json
+// @Param        message body Message{type=key_exchange_response,channel=string,payload=object{channelKey=string}} true "Key exchange"
+// @Success      200 {object} Message "Key exchange successful"
+// @Failure      400 {object} APIError "Bad Request"
+// @Router       /ws/messages/key-exchange [post]
 
 // readPump pumps messages from the WebSocket connection to the hub
 func (h *WebSocketHandler) readPump(client *Client) {
@@ -216,4 +279,4 @@ func (h *WebSocketHandler) writePump(client *Client) {
 			}
 		}
 	}
-} 
+}

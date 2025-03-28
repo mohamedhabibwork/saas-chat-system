@@ -6,21 +6,21 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/yourusername/platform/internal/encryption"
+	"saas-chat-system/internal/encryption"
 )
 
 // EncryptedRequest holds the encrypted data
 type EncryptedRequest struct {
 	EncryptedData string `json:"encryptedData"`
 	// Public key used for handshake or key exchange
-	PublicKey     string `json:"publicKey,omitempty"`
+	PublicKey string `json:"publicKey,omitempty"`
 }
 
 // EncryptedResponse holds the encrypted response data
 type EncryptedResponse struct {
 	EncryptedData string `json:"encryptedData"`
 	// Public key used for handshake or key exchange
-	PublicKey     string `json:"publicKey,omitempty"`
+	PublicKey string `json:"publicKey,omitempty"`
 }
 
 // EncryptionMiddleware handles request/response encryption
@@ -154,4 +154,4 @@ func shouldSkipEncryption(path string) bool {
 	}
 
 	return false
-} 
+}

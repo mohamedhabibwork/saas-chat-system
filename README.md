@@ -130,7 +130,7 @@ A modern, scalable platform for real-time communication and file sharing.
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/platform.git
+git clone https://github.com/mohamedhabibwork/saas-chat-system/platform.git
 cd platform
 ```
 
@@ -210,7 +210,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Support
 
-- [Issue Tracker](https://github.com/yourusername/platform/issues)
+- [Issue Tracker](https://github.com/mohamedhabibwork/saas-chat-system/platform/issues)
 - [Documentation](docs/)
 - [Security Policy](SECURITY.md)
 - [Code of Conduct](CODE_OF_CONDUCT.md)

@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"awesomeProject/internal/models"
+	"saas-chat-system/internal/models"
 )
 
 func TestBotController_CreateBot(t *testing.T) {
@@ -215,4 +215,4 @@ func TestBotController_DeleteBot(t *testing.T) {
 			}
 		})
 	}
-} 
+}

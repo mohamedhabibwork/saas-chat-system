@@ -27,19 +27,7 @@ type FileUsageHistory struct {
 	TotalSize      int64     `json:"total_size"`      // Total storage used
 }
 
-// File represents a file in the system
-type File struct {
-	ID        int       `json:"id"`         // File ID
-	UserID    int       `json:"user_id"`    // Owner's user ID
-	TenantID  int       `json:"tenant_id"`  // Tenant ID
-	Name      string    `json:"name"`       // Original file name
-	Path      string    `json:"path"`       // Storage path
-	Size      int64     `json:"size"`       // File size in bytes
-	MimeType  string    `json:"mime_type"`  // File MIME type
-	Metadata  JSON      `json:"metadata"`   // Additional file metadata
-	CreatedAt time.Time `json:"created_at"` // Creation timestamp
-	UpdatedAt time.Time `json:"updated_at"` // Last update timestamp
-}
+// File is defined in model_resolver.go
 
 // FileShare represents a file sharing record
 type FileShare struct {
@@ -52,18 +40,7 @@ type FileShare struct {
 	ExpiresAt   time.Time `json:"expires_at"`   // Share expiration timestamp
 }
 
-// SubscriptionPlan represents a subscription plan with file usage limits
-type SubscriptionPlan struct {
-	Name              string   `json:"name"`               // Plan name
-	MaxStorage        int64    `json:"max_storage"`        // Maximum storage in bytes
-	MaxFiles          int      `json:"max_files"`          // Maximum number of files
-	MaxDailyUploads   int      `json:"max_daily_uploads"`  // Maximum daily uploads
-	MaxFileSize       int64    `json:"max_file_size"`      // Maximum file size in bytes
-	AllowedExtensions []string `json:"allowed_extensions"` // List of allowed file extensions
-	AllowedMimeTypes  []string `json:"allowed_mime_types"` // List of allowed MIME types
-	CreatedAt         time.Time `json:"created_at"`        // Plan creation timestamp
-	UpdatedAt         time.Time `json:"updated_at"`        // Last update timestamp
-}
+// SubscriptionPlan is defined in model_resolver.go as SubscriptionPlanType
 
 // JSON is a custom type for handling JSON data
 type JSON map[string]interface{} 

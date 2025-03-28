@@ -9,7 +9,7 @@ import (
 // InitDB initializes the database with all necessary tables and the default admin account
 func InitDB(db *sql.DB) error {
 	// Create tables
-	if err := createTables(db); err != nil {
+	if err := createTablesV2(db); err != nil {
 		return fmt.Errorf("error creating tables: %v", err)
 	}
 
@@ -27,17 +27,22 @@ func InitDB(db *sql.DB) error {
 	return nil
 }
 
-// createTables creates all necessary database tables
-func createTables(db *sql.DB) error {
+// createTablesV2 creates all necessary database tables
+func createTablesV2(db *sql.DB) error {
 	queries := []string{
 		// Users table
 		`CREATE TABLE IF NOT EXISTS users (
 			id SERIAL PRIMARY KEY,
 			username VARCHAR(50) UNIQUE NOT NULL,
 			email VARCHAR(255) UNIQUE NOT NULL,
-			password VARCHAR(255) NOT NULL,
-			role VARCHAR(20) NOT NULL,
-			status VARCHAR(20) NOT NULL,
+			password_hash VARCHAR(255) NOT NULL,
+			first_name VARCHAR(50),
+			last_name VARCHAR(50),
+			role_id INTEGER NOT NULL,
+			is_active BOOLEAN DEFAULT true,
+			tenant_id INTEGER,
+			timezone VARCHAR(50) DEFAULT 'UTC',
+			last_login TIMESTAMP,
 			created_at TIMESTAMP NOT NULL,
 			updated_at TIMESTAMP NOT NULL
 		)`,
@@ -185,8 +190,8 @@ func createIndexes(db *sql.DB) error {
 		// Users indexes
 		`CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)`,
 		`CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`,
-		`CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)`,
-		`CREATE INDEX IF NOT EXISTS idx_users_status ON users(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_users_role ON users(role_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_users_status ON users(is_active)`,
 
 		// Tenants indexes
 		`CREATE INDEX IF NOT EXISTS idx_tenants_status ON tenants(status)`,

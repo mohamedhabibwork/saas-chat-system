@@ -3,12 +3,13 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
-	"awesomeProject/internal/models"
-	"awesomeProject/internal/database"
-	"awesomeProject/internal/websocket"
+	"saas-chat-system/internal/database"
+	"saas-chat-system/internal/models"
+	"saas-chat-system/internal/websocket"
 )
 
 // Error codes
@@ -41,7 +42,16 @@ func RespondWithJSON(w http.ResponseWriter, status int, data interface{}) {
 	_ = json.NewEncoder(w).Encode(data)
 }
 
-// HandleWebSocket handles WebSocket connections
+// @Summary      WebSocket connection
+// @Description  Establishes a WebSocket connection for real-time communication
+// @Tags         WebSocket
+// @Accept       json
+// @Produce      json
+// @Param        username query string true "Username"
+// @Success      101 {string} string "Switching Protocols"
+// @Failure      400 {object} APIError "Bad Request"
+// @Failure      401 {object} APIError "Unauthorized"
+// @Router       /ws [get]
 func HandleWebSocket(hub *models.Hub, w http.ResponseWriter, r *http.Request) {
 	conn, err := websocket.Upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -120,7 +130,15 @@ func HandleWebSocket(hub *models.Hub, w http.ResponseWriter, r *http.Request) {
 	go websocket.WritePump(client)
 }
 
-// HandleTenants handles tenant-related HTTP requests
+// @Summary      Create tenant
+// @Description  Create a new tenant
+// @Tags         Tenants
+// @Accept       json
+// @Produce      json
+// @Param        tenant body struct{Name string} true "Tenant details"
+// @Success      201 {object} map[string]interface{} "Tenant created successfully"
+// @Failure      400 {object} APIError "Bad Request"
+// @Router       /api/v1/tenants [post]
 func HandleTenants(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		RespondWithError(w, NewAPIError(http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed"))
@@ -147,37 +165,25 @@ func HandleTenants(w http.ResponseWriter, r *http.Request) {
 	RespondWithJSON(w, http.StatusCreated, resp)
 }
 
-// HandleRegister handles user registration
-func HandleRegister(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		RespondWithError(w, NewAPIError(http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed"))
-		return
-	}
-
-	var user struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-		TenantID int    `json:"tenant_id"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-		RespondWithError(w, NewAPIError(http.StatusBadRequest, ErrBadRequest, "Invalid request body"))
-		return
-	}
-
-	var userID int
-	err := database.DB.QueryRow("INSERT INTO users (username, password, tenant_id) VALUES ($1, $2, $3) RETURNING id",
-		user.Username, user.Password, user.TenantID).Scan(&userID)
-	if err != nil {
-		RespondWithError(w, NewAPIError(http.StatusBadRequest, ErrDuplicateEntry, "Username already exists in this tenant"))
-		return
-	}
-
-	resp := map[string]interface{}{"id": userID, "username": user.Username, "tenant_id": user.TenantID}
-	RespondWithJSON(w, http.StatusCreated, resp)
-}
-
-// HandleGroups handles group-related HTTP requests
+// @Summary      Create group
+// @Description  Create a new group for a tenant
+// @Tags         Groups
+// @Accept       json
+// @Produce      json
+// @Param        group body struct{Name string,TenantID int} true "Group details"
+// @Success      201 {object} map[string]interface{} "Group created successfully"
+// @Failure      400 {object} APIError "Bad Request"
+// @Router       /api/v1/groups [post]
+// @Summary      List groups
+// @Description  Get a list of groups for a tenant
+// @Tags         Groups
+// @Accept       json
+// @Produce      json
+// @Param        tenant_id query string true "Tenant ID"
+// @Success      200 {array} map[string]interface{} "List of groups"
+// @Failure      400 {object} APIError "Bad Request"
+// @Failure      500 {object} APIError "Internal Server Error"
+// @Router       /api/v1/groups [get]
 func HandleGroups(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		var group struct {
@@ -232,7 +238,15 @@ func HandleGroups(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// HandleGroupMembers handles group membership-related HTTP requests
+// @Summary      Add group member
+// @Description  Add a user to a group
+// @Tags         Groups
+// @Accept       json
+// @Produce      json
+// @Param        membership body struct{GroupID int,UserID int} true "Membership details"
+// @Success      201 {object} map[string]string "Member added successfully"
+// @Failure      400 {object} APIError "Bad Request"
+// @Router       /api/v1/groups/members [post]
 func HandleGroupMembers(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		var membership struct {
@@ -258,7 +272,15 @@ func HandleGroupMembers(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// HandleTopics handles topic-related HTTP requests
+// @Summary      Create topic
+// @Description  Create a new topic
+// @Tags         Topics
+// @Accept       json
+// @Produce      json
+// @Param        topic body struct{Name string,TenantID int} true "Topic details"
+// @Success      201 {object} map[string]interface{} "Topic created successfully"
+// @Failure      400 {object} APIError "Bad Request"
+// @Router       /api/v1/topics [post]
 func HandleTopics(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		var topic struct {
@@ -281,7 +303,23 @@ func HandleTopics(w http.ResponseWriter, r *http.Request) {
 
 		resp := map[string]interface{}{"id": topicID, "name": topic.Name, "tenant_id": topic.TenantID}
 		RespondWithJSON(w, http.StatusCreated, resp)
-	} else if r.Method == http.MethodGet {
+	} else {
+		RespondWithError(w, NewAPIError(http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed"))
+	}
+}
+
+// @Summary      List topics
+// @Description  Get a list of topics for a tenant
+// @Tags         Topics
+// @Accept       json
+// @Produce      json
+// @Param        tenant_id query string true "Tenant ID"
+// @Success      200 {array} map[string]interface{} "List of topics"
+// @Failure      400 {object} APIError "Bad Request"
+// @Failure      500 {object} APIError "Internal Server Error"
+// @Router       /api/v1/topics [get]
+func HandleTopics(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
 		tenantID := r.URL.Query().Get("tenant_id")
 		if tenantID == "" {
 			RespondWithError(w, NewAPIError(http.StatusBadRequest, ErrBadRequest, "tenant_id is required"))
@@ -313,7 +351,15 @@ func HandleTopics(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// HandleTopicSubscriptions handles topic subscription-related HTTP requests
+// @Summary      Subscribe to topic
+// @Description  Subscribe a user to a topic
+// @Tags         Topics
+// @Accept       json
+// @Produce      json
+// @Param        subscription body struct{TopicID int,UserID int} true "Subscription details"
+// @Success      201 {object} map[string]string "Subscription created successfully"
+// @Failure      400 {object} APIError "Bad Request"
+// @Router       /api/v1/topics/subscribe [post]
 func HandleTopicSubscriptions(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		var subscription struct {
@@ -339,7 +385,23 @@ func HandleTopicSubscriptions(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// HandleMessages handles message-related HTTP requests
+// @Summary      Get messages
+// @Description  Get messages based on type (private, group, notification)
+// @Tags         Messages
+// @Accept       json
+// @Produce      json
+// @Param        tenant_id query string true "Tenant ID"
+// @Param        type query string true "Message type (private, group, notification)"
+// @Param        user_id query string true "User ID"
+// @Param        other_user_id query string false "Other user ID (for private messages)"
+// @Param        group_id query string false "Group ID (for group messages)"
+// @Param        topic_name query string false "Topic name (for notifications)"
+// @Param        limit query string false "Number of messages to return"
+// @Param        offset query string false "Offset for pagination"
+// @Success      200 {array} map[string]interface{} "List of messages"
+// @Failure      400 {object} APIError "Bad Request"
+// @Failure      500 {object} APIError "Internal Server Error"
+// @Router       /api/v1/messages [get]
 func HandleMessages(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		RespondWithError(w, NewAPIError(http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed"))
@@ -549,4 +611,4 @@ func HandleMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	RespondWithJSON(w, http.StatusOK, messages)
-} 
+}

@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"awesomeProject/internal/models"
+	"saas-chat-system/internal/models"
 )
 
 // ChannelController handles channel-related operations
@@ -120,11 +120,11 @@ func (c *ChannelController) ListChannels(w http.ResponseWriter, r *http.Request)
 		}
 		channels = append(channels, map[string]interface{}{
 			"id":               id,
-			"name":            name,
-			"description":     description,
-			"created_by":      createdBy,
+			"name":             name,
+			"description":      description,
+			"created_by":       createdBy,
 			"creator_username": creatorUsername,
-			"created_at":      createdAt,
+			"created_at":       createdAt,
 		})
 	}
 
@@ -206,4 +206,4 @@ func (c *ChannelController) LeaveChannel(w http.ResponseWriter, r *http.Request)
 	}
 
 	c.RespondWithJSON(w, http.StatusOK, map[string]string{"status": "success"})
-} 
+}

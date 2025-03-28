@@ -1,19 +1,14 @@
 package services
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 
-	"awesomeProject/internal/models"
 	"github.com/pion/webrtc/v3"
-	"github.com/pion/webrtc/v3/pkg/media"
 )
 
 // WebRTCService handles WebRTC connections and media streams
 type WebRTCService struct {
-	db Database
 	// WebRTC configuration
 	config webrtc.Configuration
 	// Active connections map
@@ -23,7 +18,7 @@ type WebRTCService struct {
 }
 
 // NewWebRTCService creates a new WebRTC service
-func NewWebRTCService(db Database) *WebRTCService {
+func NewWebRTCService() *WebRTCService {
 	config := webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
 			{
@@ -33,7 +28,6 @@ func NewWebRTCService(db Database) *WebRTCService {
 	}
 
 	return &WebRTCService{
-		db:     db,
 		config: config,
 	}
 }
@@ -179,4 +173,4 @@ func (s *WebRTCService) handleConnectionStateChange(channelID int, userID int, s
 	`
 	active := state == webrtc.PeerConnectionStateConnected
 	s.db.Exec(query, active, channelID, userID)
-} 
+}

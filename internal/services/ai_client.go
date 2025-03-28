@@ -1,14 +1,17 @@
 package services
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
-	"awesomeProject/internal/models"
+	"saas-chat-system/internal/models"
 )
 
 // AIClient interface defines methods for AI model interactions
@@ -57,8 +60,8 @@ func (c *GPT4Client) Generate(ctx context.Context, message string, settings mode
 				"content": message,
 			},
 		},
-		"max_tokens":   settings.MaxTokens,
-		"temperature":  settings.Temperature,
+		"max_tokens":  settings.MaxTokens,
+		"temperature": settings.Temperature,
 		"stop":        settings.StopSequences,
 	}
 
@@ -121,8 +124,8 @@ func (c *GPT4Client) Stream(ctx context.Context, message string, settings models
 				"content": message,
 			},
 		},
-		"max_tokens":   settings.MaxTokens,
-		"temperature":  settings.Temperature,
+		"max_tokens":  settings.MaxTokens,
+		"temperature": settings.Temperature,
 		"stop":        settings.StopSequences,
 		"stream":      true,
 	}
@@ -248,4 +251,4 @@ func (c *ClaudeClient) Stream(ctx context.Context, message string, settings mode
 	// Implementation for Claude's stream method
 	// Similar to GPT4Client but using Claude's API
 	return nil, nil
-} 
+}

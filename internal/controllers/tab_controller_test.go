@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"awesomeProject/internal/models"
+	"saas-chat-system/internal/models"
 )
 
 func TestTabController_CreateTab(t *testing.T) {
@@ -352,4 +352,4 @@ func TestTabController_DeleteTab(t *testing.T) {
 			}
 		})
 	}
-} 
+}

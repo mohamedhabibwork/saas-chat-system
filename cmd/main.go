@@ -9,11 +9,11 @@ import (
 	"os/signal"
 	"syscall"
 
-	"awesomeProject/internal/database"
-	"awesomeProject/internal/services"
-	"awesomeProject/internal/websocket"
-	"awesomeProject/internal/handlers"
-	"awesomeProject/internal/middleware"
+	"saas-chat-system/internal/database"
+	"saas-chat-system/internal/handlers"
+	"saas-chat-system/internal/middleware"
+	"saas-chat-system/internal/services"
+	"saas-chat-system/internal/websocket"
 )
 
 var (
@@ -69,9 +69,21 @@ func main() {
 	// Initialize bot service
 	botService := services.NewBotService(hub, db)
 
+	// Initialize channel service
+	channelService := services.NewChannelService(db)
+
+	// Initialize WebRTC service
+	webrtcService := services.NewWebRTCService()
+
+	// Initialize user service
+	userService := services.NewUserService(db)
+
+	// Initialize chat service
+	chatService := services.NewChatService(db)
+
 	// Setup routes
 	router := http.NewServeMux()
-	setupRoutes(router, authService, subscriptionService, roleService, storageService)
+	setupRoutes(router, hub, authService, subscriptionService, roleService, storageService, botService, channelService, webrtcService, userService, chatService)
 
 	// Create HTTP server
 	server := &http.Server{
@@ -99,183 +111,86 @@ func main() {
 }
 
 func setupRoutes(
+	router *http.ServeMux,
 	hub *websocket.Hub,
 	authService *services.AuthService,
 	subscriptionService *services.SubscriptionService,
 	roleService *services.RoleService,
 	storageService *services.StorageService,
-) http.Handler {
-	mux := http.NewServeMux()
-
+	botService *services.BotService,
+	channelService *services.ChannelService,
+	webrtcService *services.WebRTCService,
+	userService *services.UserService,
+	chatService *services.ChatService,
+) {
 	// WebSocket endpoint
-	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		websocket.HandleWebSocket(hub, w, r)
+	router.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		handlers.HandleWebSocket(hub, w, r)
 	})
 
 	// Authentication endpoints
-	mux.HandleFunc("/api/auth/register", handleRegister(authService))
-	mux.HandleFunc("/api/auth/login", handleLogin(authService))
-	mux.HandleFunc("/api/auth/logout", handleLogout(authService))
-	mux.HandleFunc("/api/auth/reset-password", handleResetPassword(authService))
+	router.HandleFunc("/api/auth/register", handlers.HandleRegister(authService))
+	router.HandleFunc("/api/auth/login", handlers.HandleLogin(authService))
+	router.HandleFunc("/api/auth/logout", handlers.HandleLogout(authService))
+	router.HandleFunc("/api/auth/reset-password", handlers.HandleResetPassword(authService))
+	router.HandleFunc("/api/auth/new-password", handlers.HandleNewPassword(authService))
 
 	// Subscription endpoints
-	mux.HandleFunc("/api/subscriptions/plans", handleListPlans(subscriptionService))
-	mux.HandleFunc("/api/subscriptions", handleSubscribe(subscriptionService))
-	mux.HandleFunc("/api/subscriptions/cancel", handleCancelSubscription(subscriptionService))
-	mux.HandleFunc("/api/subscriptions/renew", handleRenewSubscription(subscriptionService))
-	mux.HandleFunc("/api/subscriptions/usage", handleGetUsage(subscriptionService))
+	router.HandleFunc("/api/subscriptions/plans", handlers.HandleListPlans(subscriptionService))
+	router.HandleFunc("/api/subscriptions", handlers.HandleSubscribe(subscriptionService))
+	router.HandleFunc("/api/subscriptions/cancel", handlers.HandleCancelSubscription(subscriptionService))
+	router.HandleFunc("/api/subscriptions/renew", handlers.HandleRenewSubscription(subscriptionService))
+	router.HandleFunc("/api/subscriptions/usage", handlers.HandleGetUsage(subscriptionService))
 
 	// Role endpoints
-	mux.HandleFunc("/api/roles", handleListRoles(roleService))
-	mux.HandleFunc("/api/roles/create", handleCreateRole(roleService))
-	mux.HandleFunc("/api/roles/update", handleUpdateRole(roleService))
-	mux.HandleFunc("/api/roles/delete", handleDeleteRole(roleService))
-	mux.HandleFunc("/api/roles/permissions", handleListPermissions(roleService))
-	mux.HandleFunc("/api/roles/assign-permissions", handleAssignPermissions(roleService))
+	router.HandleFunc("/api/v1/roles", handlers.HandleListRoles(roleService))
+	router.HandleFunc("/api/v1/roles", handlers.HandleCreateRole(roleService))
+	router.HandleFunc("/api/v1/roles/{id}", handlers.HandleUpdateRole(roleService))
+	router.HandleFunc("/api/v1/roles/{id}", handlers.HandleDeleteRole(roleService))
+	router.HandleFunc("/api/v1/permissions", handlers.HandleListPermissions(roleService))
+	router.HandleFunc("/api/v1/roles/{role_id}/permissions", handlers.HandleAssignPermissions(roleService))
 
 	// Bot endpoints
-	mux.HandleFunc("/api/bots", handleListBots(botService))
-	mux.HandleFunc("/api/bots/create", handleCreateBot(botService))
-	mux.HandleFunc("/api/bots/update", handleUpdateBot(botService))
-	mux.HandleFunc("/api/bots/delete", handleDeleteBot(botService))
-	mux.HandleFunc("/api/bots/message", handleSendMessage(botService))
-	mux.HandleFunc("/api/bots/stats", handleGetBotStats(botService))
+	router.HandleFunc("/api/v1/bots", handlers.HandleListBots(botService))
+	router.HandleFunc("/api/v1/bots", handlers.HandleCreateBot(botService))
+	router.HandleFunc("/api/v1/bots/{id}", handlers.HandleUpdateBot(botService))
+	router.HandleFunc("/api/v1/bots/{id}", handlers.HandleDeleteBot(botService))
+	router.HandleFunc("/api/v1/bots/{id}/message", handlers.HandleSendMessage(botService))
+	router.HandleFunc("/api/v1/bots/{id}/stats", handlers.HandleGetBotStats(botService))
+
+	// Channel endpoints
+	channelHandlers := handlers.NewChannelHandlers(channelService, webrtcService)
+	router.HandleFunc("/api/v1/channels", channelHandlers.HandleCreateChannel)
+	router.HandleFunc("/api/v1/channels/{id}/members", channelHandlers.HandleGetMembers)
+	router.HandleFunc("/api/v1/channels/{channel_id}/members", channelHandlers.HandleAddMember)
+	router.HandleFunc("/api/v1/channels/{channel_id}/members/{user_id}", channelHandlers.HandleRemoveMember)
+	router.HandleFunc("/api/v1/channels/{channel_id}/messages", channelHandlers.HandleAddMessage)
+	router.HandleFunc("/api/v1/channels/{channel_id}/messages", channelHandlers.HandleGetMessages)
+	router.HandleFunc("/api/v1/channels/{channel_id}/webrtc", channelHandlers.HandleWebRTCConnection)
+	router.HandleFunc("/api/v1/channels/{channel_id}/webrtc/ice", channelHandlers.HandleWebRTCICECandidate)
+
+	// User endpoints
+	userHandlers := handlers.NewUserHandlers(userService)
+	router.HandleFunc("/api/v1/users", userHandlers.HandleCreate)
+	router.HandleFunc("/api/v1/users/{id}", userHandlers.HandleGet)
+	router.HandleFunc("/api/v1/users/{id}", userHandlers.HandleUpdate)
+	router.HandleFunc("/api/v1/users/{id}", userHandlers.HandleDelete)
+	router.HandleFunc("/api/v1/users", userHandlers.HandleList)
+
+	// Chat endpoints
+	chatHandlers := handlers.NewChatHandlers(chatService)
+	router.HandleFunc("/api/v1/channels", chatHandlers.HandleCreateChannel)
+	router.HandleFunc("/api/v1/channels/{channel_id}/join", chatHandlers.HandleJoinChannel)
+	router.HandleFunc("/api/v1/channels/{channel_id}/leave", chatHandlers.HandleLeaveChannel)
+	router.HandleFunc("/api/v1/channels/{channel_id}/messages", chatHandlers.HandleGetMessages)
+	router.HandleFunc("/api/v1/channels/{channel_id}/messages", chatHandlers.HandleSendMessage)
 
 	// File handlers with middleware
 	fileHandlers := handlers.NewFileHandlers(storageService)
 	fileMiddleware := middleware.NewFileUploadMiddleware(subscriptionService)
-	
-	mux.HandleFunc("/api/files/upload", fileMiddleware.HandleFileUpload(fileHandlers.HandleUpload))
-	mux.HandleFunc("/api/files/download", fileHandlers.HandleDownload)
-	mux.HandleFunc("/api/files/delete", fileHandlers.HandleDelete)
-	mux.HandleFunc("/api/files/list", fileHandlers.HandleList)
 
-	return mux
+	router.HandleFunc("/api/v1/files/upload", fileMiddleware.HandleFileUpload(fileHandlers.HandleUpload))
+	router.HandleFunc("/api/v1/files/download", fileHandlers.HandleDownload)
+	router.HandleFunc("/api/v1/files/delete", fileHandlers.HandleDelete)
+	router.HandleFunc("/api/v1/files/list", fileHandlers.HandleList)
 }
-
-// Handler functions will be implemented in separate files
-func handleRegister(authService *services.AuthService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Implement registration handler
-	}
-}
-
-func handleLogin(authService *services.AuthService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Implement login handler
-	}
-}
-
-func handleLogout(authService *services.AuthService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Implement logout handler
-	}
-}
-
-func handleResetPassword(authService *services.AuthService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Implement password reset handler
-	}
-}
-
-func handleListPlans(subscriptionService *services.SubscriptionService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Implement list plans handler
-	}
-}
-
-func handleSubscribe(subscriptionService *services.SubscriptionService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Implement subscription handler
-	}
-}
-
-func handleCancelSubscription(subscriptionService *services.SubscriptionService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Implement cancel subscription handler
-	}
-}
-
-func handleRenewSubscription(subscriptionService *services.SubscriptionService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Implement renew subscription handler
-	}
-}
-
-func handleGetUsage(subscriptionService *services.SubscriptionService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Implement get usage handler
-	}
-}
-
-func handleListRoles(roleService *services.RoleService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Implement list roles handler
-	}
-}
-
-func handleCreateRole(roleService *services.RoleService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Implement create role handler
-	}
-}
-
-func handleUpdateRole(roleService *services.RoleService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Implement update role handler
-	}
-}
-
-func handleDeleteRole(roleService *services.RoleService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Implement delete role handler
-	}
-}
-
-func handleListPermissions(roleService *services.RoleService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Implement list permissions handler
-	}
-}
-
-func handleAssignPermissions(roleService *services.RoleService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Implement assign permissions handler
-	}
-}
-
-func handleListBots(botService *services.BotService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Implement list bots handler
-	}
-}
-
-func handleCreateBot(botService *services.BotService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Implement create bot handler
-	}
-}
-
-func handleUpdateBot(botService *services.BotService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Implement update bot handler
-	}
-}
-
-func handleDeleteBot(botService *services.BotService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Implement delete bot handler
-	}
-}
-
-func handleSendMessage(botService *services.BotService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Implement send message handler
-	}
-}
-
-func handleGetBotStats(botService *services.BotService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Implement get bot stats handler
-	}
-} 

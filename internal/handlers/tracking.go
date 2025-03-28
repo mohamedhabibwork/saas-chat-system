@@ -3,10 +3,11 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/mohamedhabibwork/saas-chat-system/internal/models"
-	"github.com/mohamedhabibwork/saas-chat-system/internal/services"
+	"saas-chat-system/internal/models"
+	"saas-chat-system/internal/services"
 )
 
 // TrackingHandler handles tracking-related HTTP requests
@@ -21,7 +22,16 @@ func NewTrackingHandler(trackingService *services.TrackingService) *TrackingHand
 	}
 }
 
-// TrackEvents handles batch event tracking
+// @Summary      Track user events
+// @Description  Record user events for analytics and tracking
+// @Tags         Tracking
+// @Accept       json
+// @Produce      json
+// @Param        events body []models.TrackingEvent true "Array of events to track"
+// @Success      200 {object} map[string]interface{} "Events tracked successfully"
+// @Failure      400 {object} map[string]interface{} "Bad Request"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Router       /api/v1/tracking/events [post]
 func (h *TrackingHandler) TrackEvents(c *gin.Context) {
 	var events []models.TrackingEvent
 	if err := c.ShouldBindJSON(&events); err != nil {
@@ -44,7 +54,16 @@ func (h *TrackingHandler) TrackEvents(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Events tracked successfully"})
 }
 
-// TrackMetrics handles batch metric tracking
+// @Summary      Track system metrics
+// @Description  Record system metrics for monitoring
+// @Tags         Tracking
+// @Accept       json
+// @Produce      json
+// @Param        metrics body []models.TrackingMetric true "Array of metrics to track"
+// @Success      200 {object} map[string]interface{} "Metrics tracked successfully"
+// @Failure      400 {object} map[string]interface{} "Bad Request"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Router       /api/v1/tracking/metrics [post]
 func (h *TrackingHandler) TrackMetrics(c *gin.Context) {
 	var metrics []models.TrackingMetric
 	if err := c.ShouldBindJSON(&metrics); err != nil {
@@ -67,7 +86,16 @@ func (h *TrackingHandler) TrackMetrics(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Metrics tracked successfully"})
 }
 
-// TrackErrors handles batch error tracking
+// @Summary      Track system errors
+// @Description  Record system errors for monitoring and debugging
+// @Tags         Tracking
+// @Accept       json
+// @Produce      json
+// @Param        errors body []models.TrackingError true "Array of errors to track"
+// @Success      200 {object} map[string]interface{} "Errors tracked successfully"
+// @Failure      400 {object} map[string]interface{} "Bad Request"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Router       /api/v1/tracking/errors [post]
 func (h *TrackingHandler) TrackErrors(c *gin.Context) {
 	var errors []models.TrackingError
 	if err := c.ShouldBindJSON(&errors); err != nil {
@@ -90,7 +118,14 @@ func (h *TrackingHandler) TrackErrors(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Errors tracked successfully"})
 }
 
-// GetTrackingStats retrieves tracking statistics
+// @Summary      Get tracking statistics
+// @Description  Retrieve statistics about tracked events, metrics, and errors
+// @Tags         Tracking
+// @Accept       json
+// @Produce      json
+// @Success      200 {object} models.TrackingStats "Tracking statistics"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Router       /api/v1/tracking/stats [get]
 func (h *TrackingHandler) GetTrackingStats(c *gin.Context) {
 	tenantID := c.GetString("tenant_id")
 
@@ -103,7 +138,16 @@ func (h *TrackingHandler) GetTrackingStats(c *gin.Context) {
 	c.JSON(http.StatusOK, stats)
 }
 
-// GetEvents retrieves tracking events
+// @Summary      Get tracked events
+// @Description  Retrieve tracked events with optional filtering
+// @Tags         Tracking
+// @Accept       json
+// @Produce      json
+// @Param        limit query int false "Maximum number of events to return"
+// @Param        offset query int false "Number of events to skip"
+// @Success      200 {array} models.TrackingEvent "List of events"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Router       /api/v1/tracking/events [get]
 func (h *TrackingHandler) GetEvents(c *gin.Context) {
 	tenantID := c.GetString("tenant_id")
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
@@ -118,7 +162,16 @@ func (h *TrackingHandler) GetEvents(c *gin.Context) {
 	c.JSON(http.StatusOK, events)
 }
 
-// GetMetrics retrieves tracking metrics
+// @Summary      Get tracked metrics
+// @Description  Retrieve tracked metrics with optional filtering
+// @Tags         Tracking
+// @Accept       json
+// @Produce      json
+// @Param        limit query int false "Maximum number of metrics to return"
+// @Param        offset query int false "Number of metrics to skip"
+// @Success      200 {array} models.TrackingMetric "List of metrics"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Router       /api/v1/tracking/metrics [get]
 func (h *TrackingHandler) GetMetrics(c *gin.Context) {
 	tenantID := c.GetString("tenant_id")
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
@@ -133,7 +186,16 @@ func (h *TrackingHandler) GetMetrics(c *gin.Context) {
 	c.JSON(http.StatusOK, metrics)
 }
 
-// GetErrors retrieves tracking errors
+// @Summary      Get tracked errors
+// @Description  Retrieve tracked errors with optional filtering
+// @Tags         Tracking
+// @Accept       json
+// @Produce      json
+// @Param        limit query int false "Maximum number of errors to return"
+// @Param        offset query int false "Number of errors to skip"
+// @Success      200 {array} models.TrackingError "List of errors"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Router       /api/v1/tracking/errors [get]
 func (h *TrackingHandler) GetErrors(c *gin.Context) {
 	tenantID := c.GetString("tenant_id")
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
@@ -148,7 +210,16 @@ func (h *TrackingHandler) GetErrors(c *gin.Context) {
 	c.JSON(http.StatusOK, errors)
 }
 
-// CleanupOldData removes old tracking data
+// @Summary      Clean up old tracking data
+// @Description  Remove old tracking data based on retention policy
+// @Tags         Tracking
+// @Accept       json
+// @Produce      json
+// @Param        older_than query string false "Duration of data to keep (e.g., '30d')"
+// @Success      200 {object} map[string]interface{} "Cleanup completed successfully"
+// @Failure      400 {object} map[string]interface{} "Bad Request"
+// @Failure      401 {object} map[string]interface{} "Unauthorized"
+// @Router       /api/v1/tracking/cleanup [post]
 func (h *TrackingHandler) CleanupOldData(c *gin.Context) {
 	tenantID := c.GetString("tenant_id")
 	olderThan := c.DefaultQuery("older_than", "30d")
@@ -165,4 +236,9 @@ func (h *TrackingHandler) CleanupOldData(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Old data cleaned up successfully"})
-} 
+}
+
+// parseDuration parses a duration string into a time.Duration
+func parseDuration(s string) (time.Duration, error) {
+	return time.ParseDuration(s)
+}

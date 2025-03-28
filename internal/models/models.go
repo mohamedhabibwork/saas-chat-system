@@ -54,14 +54,7 @@ type Tenant struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// User represents a user in the system
-type User struct {
-	ID        int       `json:"id"`
-	Username  string    `json:"username"`
-	Password  string    `json:"-"`
-	TenantID  int       `json:"tenant_id"`
-	CreatedAt time.Time `json:"created_at"`
-}
+// User is defined in model_resolver.go
 
 // Group represents a chat group
 type Group struct {
@@ -93,34 +86,11 @@ type TopicSubscription struct {
 	SubscribedAt  time.Time `json:"subscribed_at"`
 }
 
-// Bot represents a chat bot
-type Bot struct {
-	ID        int       `json:"id"`
-	Name      string    `json:"name"`
-	TenantID  int       `json:"tenant_id"`
-	Token     string    `json:"token"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
+// Bot is defined in model_resolver.go
 
-// Channel represents a chat channel
-type Channel struct {
-	ID          int       `json:"id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	TenantID    int       `json:"tenant_id"`
-	CreatedBy   int       `json:"created_by"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-}
+// Channel is defined in model_resolver.go
 
-// ChannelMember represents a channel membership
-type ChannelMember struct {
-	ChannelID int       `json:"channel_id"`
-	UserID    int       `json:"user_id"`
-	Role      string    `json:"role"` // "admin", "moderator", "member"
-	JoinedAt  time.Time `json:"joined_at"`
-}
+// ChannelMember is defined in model_resolver.go
 
 // Tab represents a user's custom tab
 type Tab struct {
@@ -143,12 +113,4 @@ type BotMessage struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// ChannelMessage represents a message in a channel
-type ChannelMessage struct {
-	ID            int       `json:"id"`
-	ChannelID     int       `json:"channel_id"`
-	SenderID      int       `json:"sender_id"`
-	Content       string    `json:"content"`
-	SenderTimezone string    `json:"sender_timezone,omitempty"`
-	CreatedAt     time.Time `json:"created_at"`
-} 
+// ChannelMessage is defined in model_resolver.go 

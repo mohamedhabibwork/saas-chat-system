@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"awesomeProject/internal/models"
-	"awesomeProject/internal/services"
+	"saas-chat-system/internal/models"
+	"saas-chat-system/internal/services"
 )
 
 // RegisterRequest represents the registration request body
@@ -41,7 +41,16 @@ type Response struct {
 	Error   string      `json:"error,omitempty"`
 }
 
-// HandleRegister handles user registration
+// @Summary      Register user
+// @Description  Create a new user account
+// @Tags         Auth
+// @Accept       json
+// @Produce      json
+// @Param        request body RegisterRequest true "Registration details"
+// @Success      201 {object} models.User "User created successfully"
+// @Failure      400 {object} Response "Bad Request"
+// @Failure      500 {object} Response "Internal Server Error"
+// @Router       /api/auth/register [post]
 func HandleRegister(authService *services.AuthService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -63,12 +72,12 @@ func HandleRegister(authService *services.AuthService) http.HandlerFunc {
 
 		// Create user
 		user := &models.User{
-			Username:  req.Username,
-			Email:     req.Email,
+			Username:     req.Username,
+			Email:        req.Email,
 			PasswordHash: req.Password,
-			FirstName: req.FirstName,
-			LastName:  req.LastName,
-			IsActive:  true,
+			FirstName:    req.FirstName,
+			LastName:     req.LastName,
+			IsActive:     true,
 		}
 
 		if err := authService.Register(user); err != nil {
@@ -80,7 +89,16 @@ func HandleRegister(authService *services.AuthService) http.HandlerFunc {
 	}
 }
 
-// HandleLogin handles user login
+// @Summary      User login
+// @Description  Authenticate user and get session token
+// @Tags         Auth
+// @Accept       json
+// @Produce      json
+// @Param        request body LoginRequest true "Login credentials"
+// @Success      200 {object} models.Session "Login successful"
+// @Failure      400 {object} Response "Bad Request"
+// @Failure      401 {object} Response "Invalid credentials"
+// @Router       /api/auth/login [post]
 func HandleLogin(authService *services.AuthService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -115,7 +133,16 @@ func HandleLogin(authService *services.AuthService) http.HandlerFunc {
 	}
 }
 
-// HandleLogout handles user logout
+// @Summary      Logout user
+// @Description  Invalidate user session
+// @Tags         Auth
+// @Accept       json
+// @Produce      json
+// @Param        X-Session-ID header string true "Session ID"
+// @Success      200 {object} Response "Logout successful"
+// @Failure      400 {object} Response "Bad Request"
+// @Failure      401 {object} Response "Invalid session"
+// @Router       /api/auth/logout [post]
 func HandleLogout(authService *services.AuthService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -124,14 +151,21 @@ func HandleLogout(authService *services.AuthService) http.HandlerFunc {
 		}
 
 		// Get session ID from request
-		sessionID := r.Header.Get("X-Session-ID")
-		if sessionID == "" {
+		sessionToken := r.Header.Get("X-Session-ID")
+		if sessionToken == "" {
 			sendResponse(w, false, nil, "Missing session ID", http.StatusBadRequest)
 			return
 		}
 
+		// Validate session and get session ID
+		session, err := authService.ValidateSession(sessionToken)
+		if err != nil {
+			sendResponse(w, false, nil, "Invalid or expired session", http.StatusUnauthorized)
+			return
+		}
+
 		// Logout user
-		if err := authService.Logout(sessionID); err != nil {
+		if err := authService.Logout(session.ID); err != nil {
 			sendResponse(w, false, nil, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -140,7 +174,16 @@ func HandleLogout(authService *services.AuthService) http.HandlerFunc {
 	}
 }
 
-// HandleResetPassword handles password reset requests
+// @Summary      Request password reset
+// @Description  Send password reset email to user
+// @Tags         Auth
+// @Accept       json
+// @Produce      json
+// @Param        request body ResetPasswordRequest true "Email address"
+// @Success      200 {object} Response "Reset email sent"
+// @Failure      400 {object} Response "Bad Request"
+// @Failure      500 {object} Response "Internal Server Error"
+// @Router       /api/auth/reset-password [post]
 func HandleResetPassword(authService *services.AuthService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -170,7 +213,16 @@ func HandleResetPassword(authService *services.AuthService) http.HandlerFunc {
 	}
 }
 
-// HandleNewPassword handles setting a new password
+// @Summary      Set new password
+// @Description  Set a new password using a reset token
+// @Tags         Auth
+// @Accept       json
+// @Produce      json
+// @Param        request body NewPasswordRequest true "New password details"
+// @Success      200 {object} Response "Password updated successfully"
+// @Failure      400 {object} Response "Bad Request"
+// @Failure      500 {object} Response "Internal Server Error"
+// @Router       /api/auth/new-password [post]
 func HandleNewPassword(authService *services.AuthService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -212,4 +264,4 @@ func sendResponse(w http.ResponseWriter, success bool, data interface{}, errMsg 
 	}
 
 	json.NewEncoder(w).Encode(response)
-} 
+}
